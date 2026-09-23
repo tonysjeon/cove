@@ -1,0 +1,13 @@
+{
+  "name": "cove",
+  "private": true,
+  "workspaces": ["client", "server"],
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "dev": "concurrently -k -n client,server \"npm run dev -w client\" \"npm run dev -w server\"",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test -w server"
+  },
+  "devDependencies": { "concurrently": "^9.2.1" }
+}
