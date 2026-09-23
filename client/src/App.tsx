@@ -1,8 +1,29 @@
 import { useEffect, useState } from 'react'
 
-const apiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '')
+import { apiUrl } from './config'
+import { socket } from './socket/socket'
 
 export default function App() {
+  const [connection, setConnection] = useState(socket.connected ? 'Connected' : 'Connecting…')
+
+  useEffect(() => {
+    const onConnect = () => setConnection('Connected')
+    const onDisconnect = () => setConnection('Disconnected — reconnecting…')
+    const onConnectError = () => setConnection('Unable to connect — retrying…')
+
+    socket.on('connect', onConnect)
+    socket.on('disconnect', onDisconnect)
+    socket.on('connect_error', onConnectError)
+    socket.connect()
+
+    return () => {
+      socket.off('connect', onConnect)
+      socket.off('disconnect', onDisconnect)
+      socket.off('connect_error', onConnectError)
+      socket.disconnect()
+    }
+  }, [])
+
   const [status, setStatus] = useState('Checking connection…')
 
   useEffect(() => {
@@ -39,7 +60,8 @@ export default function App() {
       <p className="eyebrow">A shared space to focus</p>
       <h1>cove</h1>
       <p>Settle in and make time for what matters.</p>
-      <p className="status" role="status">{status}</p>
+      <p className="status" role="status">API health: {status}</p>
+      <p className="status" role="status">Live connection: {connection}</p>
     </main>
   )
 }
