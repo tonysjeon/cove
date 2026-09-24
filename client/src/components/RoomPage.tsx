@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { apiUrl } from '../config'
 import { socket } from '../socket/socket'
-import type { Room, JoinResult } from '../../../server/src/types/rooms'
+import type { Room, JoinResult, ConnectedUser, Presence } from '../../../server/src/types/rooms'
 
 const errors: Record<Extract<JoinResult, { success: false }>['error'], string> = {
   INVALID_ROOM_CODE: 'Enter a valid six-character room code',
@@ -23,6 +23,20 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
   const [status, setStatus] = useState('')
   const [joinError, setJoinError] = useState('')
   const [attempt, setAttempt] = useState(0)
+  const [members, setMembers] = useState<ConnectedUser[]>([])
+
+  useEffect(() => {
+    function presence(update: Presence) {
+      if (update.roomCode === roomCode) setMembers(update.members)
+    }
+    const clear = () => setMembers([])
+    socket.on('room:presence', presence)
+    socket.on('disconnect', clear)
+    return () => {
+      socket.off('room:presence', presence)
+      socket.off('disconnect', clear)
+    }
+  }, [roomCode])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -52,6 +66,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
     function join() {
       const current = ++generation
       setJoinedName('')
+      setMembers([])
       setStatus('Joining room…')
       setJoinError('')
       socket.timeout(8000).emit('room:join', { roomCode, displayName: requestedName }, (error, result) => {
@@ -90,12 +105,35 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
     setAttempt(value => value + 1)
   }
 
+  function leave() {
+    try { sessionStorage.removeItem(`cove:name:${roomCode}`) } catch { /* Storage is optional. */ }
+    setRequestedName('')
+    setJoinedName('')
+    setMembers([])
+    setStatus('Leaving room…')
+    // Disconnect even if acknowledgement is lost, so leaving cannot trigger a rejoin.
+    socket.timeout(3000).emit('room:leave', () => {
+      socket.disconnect()
+      window.location.assign('/')
+    })
+  }
+
   return (
     <section>
       {loadError ? <p role="alert">{loadError}</p> : !room ? <p role="status">Loading room…</p> : <>
         <h2>{room.name}</h2>
         <p>Room {room.code}</p>
-        {joinedName ? <p role="status">Joined as {joinedName}</p> : <form onSubmit={submit} className="create-room">
+        {joinedName ? <>
+          <p role="status">Joined as {joinedName}</p>
+          <aside className="members" aria-label="Online members">
+            <h3 aria-live="polite">{members.length} online</h3>
+            <ul>{members.map(member => <li key={member.socketId}>
+              <span aria-hidden="true" className="online-dot" />
+              {member.displayName}{member.socketId === socket.id && ' (you)'}
+            </li>)}</ul>
+          </aside>
+          <button type="button" onClick={leave}>Leave room</button>
+        </> : <form onSubmit={submit} className="create-room">
           <label htmlFor="display-name">Display name</label>
           <input id="display-name" value={name} onChange={event => setName(event.target.value)} maxLength={30} required />
           <button type="submit" disabled={!socket.connected || !!status}>Join room</button>

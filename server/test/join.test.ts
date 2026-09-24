@@ -60,7 +60,9 @@ test('socket joins validate identity, isolate rooms, switch membership, and clea
     assert.deepEqual(await join(a, { roomCode: ' abc234 ', displayName: ' Tony ' }), {
       success: true, room: rooms.get('ABC234'), displayName: 'Tony',
     })
-    assert.deepEqual(serverA.data, { roomCode: 'ABC234', displayName: 'Tony' })
+    assert.equal(serverA.data.roomCode, 'ABC234')
+    assert.equal(serverA.data.displayName, 'Tony')
+    assert.ok(serverA.data.joinedAt)
     await join(b, { roomCode: 'DEF567', displayName: 'Sarah' })
     assert.deepEqual([...io.sockets.adapter.rooms.get('ABC234')!], [a.id])
     assert.deepEqual([...io.sockets.adapter.rooms.get('DEF567')!], [b.id])
