@@ -1,9 +1,10 @@
 import type { Server as HttpServer } from 'node:http'
 import { Server } from 'socket.io'
+import { saveMessage } from '../services/messages.js'
 import { getRoom, normalizeRoomCode } from '../services/rooms.js'
 import type { ClientToServerEvents, ServerToClientEvents, SocketData, ConnectedUser } from '../types/rooms.js'
 
-export function createRoomServer(server: HttpServer, clientUrl: string, findRoom = getRoom) {
+export function createRoomServer(server: HttpServer, clientUrl: string, findRoom = getRoom, persistMessage = saveMessage) {
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(server, {
     cors: { origin: clientUrl },
   })
@@ -52,6 +53,29 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
       }).catch(error => {
         console.error('Room join failed', error)
         if (socket.connected) acknowledge({ success: false, error: 'JOIN_FAILED' })
+      })
+    })
+    socket.on('chat:send', (input, acknowledge) => {
+      if (typeof acknowledge !== 'function') return
+      pending = pending.then(async () => {
+        if (!socket.connected) return
+        const roomCode = normalizeRoomCode(input?.roomCode)
+        const { displayName } = socket.data
+        if (!roomCode || socket.data.roomCode !== roomCode || !socket.rooms.has(roomCode) || !displayName) {
+          acknowledge({ success: false, error: 'NOT_IN_ROOM' })
+          return
+        }
+        const content = typeof input?.content === 'string' ? input.content.trim() : ''
+        if (!content || content.length > 500) {
+          acknowledge({ success: false, error: 'INVALID_MESSAGE' })
+          return
+        }
+        const message = await persistMessage(roomCode, displayName, content)
+        io.to(roomCode).emit('chat:newMessage', { roomCode, message })
+        if (socket.connected) acknowledge({ success: true, message })
+      }).catch(error => {
+        console.error('Chat send failed', error)
+        if (socket.connected) acknowledge({ success: false, error: 'SEND_FAILED' })
       })
     })
     socket.on('room:leave', acknowledge => {

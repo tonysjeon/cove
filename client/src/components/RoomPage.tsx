@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import Chat from './Chat'
 import { apiUrl } from '../config'
 import { socket } from '../socket/socket'
 import type { Room, JoinResult, ConnectedUser, Presence } from '../../../server/src/types/rooms'
@@ -138,6 +139,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
           <input id="display-name" value={name} onChange={event => setName(event.target.value)} maxLength={30} required />
           <button type="submit" disabled={!socket.connected || !!status}>Join room</button>
         </form>}
+        <Chat key={roomCode} roomCode={roomCode} joined={!!joinedName} />
         {status && <p role="status">{status}</p>}
         {joinError && <p role="alert">{joinError}</p>}
       </>}

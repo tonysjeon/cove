@@ -13,4 +13,16 @@ model Room {
   code      String   @unique
   name      String
   createdAt DateTime @default(now())
+  messages  Message[]
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  roomId     String
+  senderName String
+  content    String
+  createdAt  DateTime @default(now())
+  room       Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt, id])
 }

@@ -118,7 +118,7 @@ Use **Find room** on the home page or open a shared `/room/:roomCode` link. Code
 
 Enter a display name of 1–30 characters to join. The client sends `room:join` with `{ roomCode, displayName }` and waits for acknowledgement. The server validates the inputs and room existence, joins the matching Socket.io room, and stores the name and room code on the socket. A socket belongs to only one study room at a time; switching rooms removes the prior membership.
 
-The room page remembers successful display names in session storage and rejoins after refresh or reconnection. Disconnecting removes the socket from its rooms. The room view confirms your membership and shows the online member list; chat and the timer will be added separately.
+The room page remembers successful display names in session storage and rejoins after refresh or reconnection. Disconnecting removes the socket from its rooms. The room view confirms your membership and shows the online member list; the shared timer will be added separately.
 
 Verify with two browser tabs: join the same room with different names, refresh one tab, and restart the backend. Each tab should confirm its own name after reconnecting. Also try an invalid code, a nonexistent code, and a blank display name. Automated socket tests cover validation, room isolation, room switching, and disconnecting during lookup.
 
@@ -131,3 +131,13 @@ Joining, switching rooms, leaving, and disconnecting broadcast the updated list 
 **Leave room** sends `room:leave`, clears the saved name for that room, and returns home. The server serializes leave requests with pending joins so a delayed lookup cannot leave a departed user in a room.
 
 To verify, open two tabs in one room, join with different names, and confirm both show two members. Leave or close one tab and confirm the other updates to one. Refresh and reconnect to check recovery. Open a different room in another tab to check that lists stay isolated. A lost network connection is removed when Socket.io detects the disconnect through its heartbeat timeout.
+
+## Room chat
+
+Joined users can send messages of 1–500 characters. The backend trims content, verifies socket membership, takes the sender name from the socket, and saves each accepted message in PostgreSQL before broadcasting it to that room. The client retains the draft on a send failure and does not automatically retry a send with an uncertain acknowledgement.
+
+`chat:send` accepts `{ roomCode, content }` and acknowledges success with the saved message or a validation/persistence error. `chat:newMessage` carries `{ roomCode, message }` only to members of that room. `GET /api/rooms/:roomCode/messages` returns the latest 50 persisted messages in chronological order. Room codes are shareable access links, not authenticated permissions; anyone with a code can retrieve that room's recent history.
+
+The client subscribes to live updates before loading history, merges by message ID to avoid duplicates or losing messages during the history request, and reloads recent history after reconnecting. A reconnect retrieves the latest 50 messages; older missed messages are not paginated yet. The chat shows sender names, timestamps, loading/error states, and an empty state.
+
+Apply the message migration with `npm run db:deploy -w server` before starting the backend. For verification, join one room in two tabs, send messages in both directions, and refresh to confirm history persists. Use a different room to check isolation. Tests cover membership and content validation, sender spoofing, persistence failures, live/history merging, room isolation, and the 50-message history limit.

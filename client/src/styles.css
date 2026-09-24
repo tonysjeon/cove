@@ -26,3 +26,11 @@ a { color: inherit; }
 .members ul { list-style: none; margin: 0; padding: 0; }
 .members li { display: flex; align-items: center; gap: 8px; padding: 6px 0; overflow-wrap: anywhere; }
 .online-dot { width: 8px; height: 8px; border-radius: 50%; background: #397d4c; flex-shrink: 0; }
+
+.chat { margin: 28px 0; }
+.chat-messages { max-height: 360px; overflow-y: auto; padding-right: 8px; }
+.chat-message { padding: 12px 0; border-bottom: 1px solid #c5d3c5; }
+.chat-message header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; }
+.chat-message time { font-size: 0.8rem; color: #50685b; }
+.chat-message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
+textarea { font: inherit; color: inherit; padding: 12px; border: 1px solid #8a9e92; border-radius: 8px; resize: vertical; min-width: 0; }
