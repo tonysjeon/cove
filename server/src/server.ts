@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { createServer } from 'node:http'
 import { Server } from 'socket.io'
 import { createApp } from './app.js'
+import { disconnectDatabase } from './db/prisma.js'
 
 const port = Number(process.env.PORT || 3001)
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -25,5 +26,7 @@ server.listen(port, () => {
 })
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => io.close())
+  process.on(signal, () => {
+    io.close(() => { void disconnectDatabase() })
+  })
 }
