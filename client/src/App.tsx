@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { apiUrl } from './config'
 import { socket } from './socket/socket'
 import CreateRoom from './components/CreateRoom'
+import JoinRoom from './components/JoinRoom'
+import RoomPage from './components/RoomPage'
 
 export default function App() {
   const [connection, setConnection] = useState(socket.connected ? 'Connected' : 'Connecting…')
@@ -56,20 +58,14 @@ export default function App() {
     }
   }, [])
 
-  const roomCode = window.location.pathname.match(/^\/room\/([A-HJ-NP-Z2-9]{6})\/?$/)?.[1]
+  const roomCode = window.location.pathname.match(/^\/room\/([^/]+)\/?$/)?.[1]
 
   return (
     <main>
       <p className="eyebrow">A shared space to focus</p>
       <h1>cove</h1>
       <p>Settle in and make time for what matters.</p>
-      {roomCode ? (
-        <section>
-          <h2>Room {roomCode}</h2>
-          <p>Room links are ready to share — joining rooms is coming next</p>
-          <a href="/">Back to home</a>
-        </section>
-      ) : <CreateRoom />}
+      {roomCode ? <RoomPage roomCode={roomCode.toUpperCase()} /> : <><CreateRoom /><JoinRoom /></>}
       <p className="status" role="status">API health: {status}</p>
       <p className="status" role="status">Live connection: {connection}</p>
     </main>

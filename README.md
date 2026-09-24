@@ -98,7 +98,7 @@ Enter a name on the home page and select **Create room**. The backend trims the 
 
 `POST /api/rooms` accepts `{"name":"Algorithms study group"}` and returns HTTP 201 with `{"code":"ABC234","name":"Algorithms study group"}`. Invalid names return 400; database errors return a generic 500 response.
 
-Successful creation navigates to `/room/:roomCode`. This is currently a placeholder displaying the code; room lookup, joining, and membership are not implemented yet.
+Successful creation navigates to `/room/:roomCode`, where the room is loaded and a display name is requested before joining.
 
 Schema and SQL migrations are in `server/prisma`. Generate a schema change with `npm run db:migrate -w server -- --name describe_change`; apply committed migrations with `npm run db:deploy -w server`. Development, build, typecheck, and test commands generate Prisma Client automatically.
 
@@ -111,3 +111,13 @@ TEST_DATABASE_URL=postgresql://cove@localhost:5433/cove_test npm run test:integr
 ```
 
 The root dependency overrides select patched `deepmerge-ts` and `mysql2` releases for Prisma's CLI dependencies. Reassess these overrides when upgrading Prisma.
+
+## Room lookup and joining
+
+Use **Find room** on the home page or open a shared `/room/:roomCode` link. Codes are trimmed and normalized to uppercase. `GET /api/rooms/:roomCode` returns the room name and code, 400 for invalid codes, or 404 for missing rooms.
+
+Enter a display name of 1–30 characters to join. The client sends `room:join` with `{ roomCode, displayName }` and waits for acknowledgement. The server validates the inputs and room existence, joins the matching Socket.io room, and stores the name and room code on the socket. A socket belongs to only one study room at a time; switching rooms removes the prior membership.
+
+The room page remembers successful display names in session storage and rejoins after refresh or reconnection. Disconnecting removes the socket from its rooms. The current view confirms your own membership; the online member list, chat, and timer will be added separately.
+
+Verify with two browser tabs: join the same room with different names, refresh one tab, and restart the backend. Each tab should confirm its own name after reconnecting. Also try an invalid code, a nonexistent code, and a blank display name. Automated socket tests cover validation, room isolation, room switching, and disconnecting during lookup.

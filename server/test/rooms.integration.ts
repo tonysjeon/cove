@@ -26,6 +26,9 @@ test('concurrent room creation persists distinct codes across database connectio
       codes.push(room.code)
     }
     assert.equal(new Set(codes).size, 5)
+    const lookup = await fetch(`${url}/${codes[0].toLowerCase()}`)
+    assert.equal(lookup.status, 200)
+    assert.equal((await lookup.json() as { code: string }).code, codes[0])
     await disconnectDatabase()
     const rooms = await getPrisma().room.findMany({ where: { code: { in: codes } } })
     assert.equal(rooms.length, 5)

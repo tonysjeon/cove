@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import { createServer } from 'node:http'
-import { Server } from 'socket.io'
+import { createRoomServer } from './socket/rooms.js'
 import { createApp } from './app.js'
 import { disconnectDatabase } from './db/prisma.js'
 
@@ -12,14 +12,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
 const app = createApp(clientUrl)
 const server = createServer(app)
-const io = new Server(server, { cors: { origin: clientUrl } })
-
-io.on('connection', socket => {
-  console.log(`socket connected: ${socket.id}`)
-  socket.on('disconnect', reason => {
-    console.log(`socket disconnected: ${socket.id} (${reason})`)
-  })
-})
+const io = createRoomServer(server, clientUrl)
 
 server.listen(port, () => {
   console.log(`cove server listening on http://localhost:${port}`)
