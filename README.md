@@ -118,6 +118,16 @@ Use **Find room** on the home page or open a shared `/room/:roomCode` link. Code
 
 Enter a display name of 1–30 characters to join. The client sends `room:join` with `{ roomCode, displayName }` and waits for acknowledgement. The server validates the inputs and room existence, joins the matching Socket.io room, and stores the name and room code on the socket. A socket belongs to only one study room at a time; switching rooms removes the prior membership.
 
-The room page remembers successful display names in session storage and rejoins after refresh or reconnection. Disconnecting removes the socket from its rooms. The current view confirms your own membership; the online member list, chat, and timer will be added separately.
+The room page remembers successful display names in session storage and rejoins after refresh or reconnection. Disconnecting removes the socket from its rooms. The room view confirms your membership and shows the online member list; chat and the timer will be added separately.
 
 Verify with two browser tabs: join the same room with different names, refresh one tab, and restart the backend. Each tab should confirm its own name after reconnecting. Also try an invalid code, a nonexistent code, and a blank display name. Automated socket tests cover validation, room isolation, room switching, and disconnecting during lookup.
+
+## Live presence
+
+Each room displays its online count and member names. `room:presence` sends `{ roomCode, members }`, where each member includes a socket ID, display name, and join timestamp. The server derives this list from active Socket.io room memberships and keeps connection metadata in memory, not PostgreSQL.
+
+Joining, switching rooms, leaving, and disconnecting broadcast the updated list only to the affected rooms. Repeated joins do not duplicate a member, and two users may share a display name because socket IDs identify connections. Refreshing replaces the previous connection; the client clears stale presence while disconnected and receives a fresh list after rejoining.
+
+**Leave room** sends `room:leave`, clears the saved name for that room, and returns home. The server serializes leave requests with pending joins so a delayed lookup cannot leave a departed user in a room.
+
+To verify, open two tabs in one room, join with different names, and confirm both show two members. Leave or close one tab and confirm the other updates to one. Refresh and reconnect to check recovery. Open a different room in another tab to check that lists stay isolated. A lost network connection is removed when Socket.io detects the disconnect through its heartbeat timeout.
