@@ -24,3 +24,13 @@ export async function createRoom(name: string) {
   }
   throw new Error('Unable to allocate a unique room code')
 }
+
+export function normalizeRoomCode(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const code = value.trim().toUpperCase()
+  return /^[A-HJ-NP-Z2-9]{6}$/.test(code) ? code : null
+}
+
+export async function getRoom(code: string) {
+  return getPrisma().room.findUnique({ where: { code }, select: { code: true, name: true } })
+}

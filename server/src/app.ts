@@ -1,13 +1,20 @@
 import cors from 'cors'
 import express, { type ErrorRequestHandler } from 'express'
-import { createRoom } from './services/rooms.js'
+import { createRoom, getRoom, normalizeRoomCode } from './services/rooms.js'
 
-export function createApp(clientUrl: string, saveRoom = createRoom) {
+export function createApp(clientUrl: string, saveRoom = createRoom, findRoom = getRoom) {
   const app = express()
   app.use(cors({ origin: clientUrl }))
   app.use(express.json())
   app.get('/api/health', (_request, response) => {
     response.json({ status: 'ok' })
+  })
+  app.get('/api/rooms/:roomCode', async (request, response) => {
+    const code = normalizeRoomCode(request.params.roomCode)
+    if (!code) { response.status(400).json({ error: 'INVALID_ROOM_CODE' }); return }
+    const room = await findRoom(code)
+    if (!room) { response.status(404).json({ error: 'ROOM_NOT_FOUND' }); return }
+    response.json(room)
   })
   app.post('/api/rooms', async (request, response) => {
     const name: unknown = request.body?.name
