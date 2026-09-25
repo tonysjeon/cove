@@ -36,10 +36,11 @@ export default function CreateRoom() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="create-room">
+    <form onSubmit={handleSubmit} className="room-form" aria-labelledby="create-title">
+      <div className="form-heading"><span className="section-mark" aria-hidden="true">+</span><h2 id="create-title">Make a little space</h2><p>Start a room and invite your favorite people.</p></div>
       <label htmlFor="room-name">Room name</label>
       <input id="room-name" value={name} onChange={event => setName(event.target.value)}
-        maxLength={80} required placeholder="Algorithms study group" disabled={pending} />
+        maxLength={80} required placeholder="e.g. The afternoon club" disabled={pending} />
       <button type="submit" disabled={pending}>{pending ? 'Creating…' : 'Create room'}</button>
       {error && <p role="alert">{error}</p>}
     </form>

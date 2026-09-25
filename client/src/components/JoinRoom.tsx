@@ -13,12 +13,12 @@ export default function JoinRoom() {
     window.location.assign(`/room/${roomCode}`)
   }
   return (
-    <form onSubmit={submit} className="create-room">
-      <h2>Join a room</h2>
+    <form onSubmit={submit} className="room-form" aria-labelledby="join-title">
+      <div className="form-heading"><h2 id="join-title">Already have a room?</h2><p>Pull up a chair. Your friends are waiting.</p></div>
       <label htmlFor="room-code">Room code</label>
       <input id="room-code" value={code} onChange={event => setCode(event.target.value)}
-        required autoCapitalize="characters" spellCheck={false} placeholder="ABC234" />
-      <button type="submit">Find room</button>
+        className="code-input" required autoCapitalize="characters" spellCheck={false} placeholder="ABC234" />
+      <button className="button-secondary" type="submit">Find room <span aria-hidden="true">→</span></button>
       {error && <p role="alert">{error}</p>}
     </form>
   )

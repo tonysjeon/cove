@@ -90,10 +90,10 @@ export default function Chat({ roomCode, joined }: { roomCode: string; joined: b
   if (!joined && !messages.length && !draft) return null
   return (
     <section className="chat" aria-label="Room chat">
-      <h3>Chat</h3>
+      <header className="panel-heading"><div><h2>Room chat</h2><p className="panel-description">A hello, a small win, or just a little encouragement.</p></div><span className="chat-symbol" aria-hidden="true">↗</span></header>
       {loading && joined && <p role="status">Loading recent messages…</p>}
       {historyError && <p role="alert">{historyError} <button type="button" disabled={!joined} onClick={() => setRetry(value => value + 1)}>Retry history</button></p>}
-      {!loading && !historyError && !messages.length && <p>No messages yet — start the conversation</p>}
+      {!loading && !historyError && !messages.length && <div className="chat-empty"><span aria-hidden="true">✳</span><p>Every good session starts with a hello.</p><small>Be the first to say something.</small></div>}
       <div className="chat-messages" role="log" aria-label="Room messages" aria-live="polite">
         {messages.map(message => <article key={message.id} className="chat-message">
           <header><strong>{message.senderName}</strong> <time dateTime={message.createdAt} title={new Date(message.createdAt).toLocaleString()}>
@@ -103,11 +103,11 @@ export default function Chat({ roomCode, joined }: { roomCode: string; joined: b
         </article>)}
         <div ref={end} />
       </div>
-      <form onSubmit={send} className="create-room">
-        <label htmlFor="chat-message">Message</label>
+      <form onSubmit={send} className="chat-compose">
+        <label className="sr-only" htmlFor="chat-message">Message</label>
         <textarea id="chat-message" value={draft} onChange={event => setDraft(event.target.value)} maxLength={500}
-          rows={3} required disabled={!joined || sending} placeholder="Share what you’re working on" />
-        <button type="submit" disabled={!joined || sending || !draft.trim()}>{sending ? 'Sending…' : 'Send message'}</button>
+          rows={2} required disabled={!joined || sending} placeholder="Say hello, share a little progress…" />
+        <button type="submit" disabled={!joined || sending || !draft.trim()}>{sending ? 'Sending…' : 'Send message'} <span aria-hidden="true">↑</span></button>
       </form>
       {!joined && <p role="status">Reconnect to send messages</p>}
       {sendError && <p role="alert">{sendError}</p>}
