@@ -1,3 +1,18 @@
+export type TimerState = {
+  mode: 'focus' | 'break'
+  status: 'running' | 'paused'
+  durationSeconds: number
+  remainingSeconds: number
+  startedAt: number | null
+  revision: number
+}
+export type TimerUpdate = { roomCode: string; timer: TimerState; serverNow: number }
+export type TimerAction = 'start' | 'pause' | 'reset'
+export type TimerResult =
+  | { success: true; state: TimerUpdate }
+  | { success: false; error: 'NOT_IN_ROOM' | 'TIMER_ALREADY_RUNNING' | 'TIMER_ALREADY_PAUSED' | 'TIMER_FAILED' }
+type TimerCommand = (input: { roomCode: string }, acknowledge: (result: TimerResult) => void) => void
+
 export type ChatMessage = { id: string; roomId: string; senderName: string; content: string; createdAt: string }
 export type ChatUpdate = { roomCode: string; message: ChatMessage }
 export type SendResult =
@@ -14,12 +29,16 @@ export type Presence = { roomCode: string; members: ConnectedUser[] }
 export type LeaveResult = { success: true } | { success: false; error: 'LEAVE_FAILED' }
 
 export interface ClientToServerEvents {
+  'timer:start': TimerCommand
+  'timer:pause': TimerCommand
+  'timer:reset': TimerCommand
   'chat:send': (input: { roomCode: string; content: string }, acknowledge: (result: SendResult) => void) => void
   'room:leave': (acknowledge: (result: LeaveResult) => void) => void
   'room:join': (input: { roomCode: string; displayName: string }, acknowledge: (result: JoinResult) => void) => void
 }
 
 export interface ServerToClientEvents {
+  'timer:state': (update: TimerUpdate) => void
   'chat:newMessage': (update: ChatUpdate) => void
   'room:presence': (presence: Presence) => void
 }

@@ -118,7 +118,7 @@ Use **Find room** on the home page or open a shared `/room/:roomCode` link. Code
 
 Enter a display name of 1–30 characters to join. The client sends `room:join` with `{ roomCode, displayName }` and waits for acknowledgement. The server validates the inputs and room existence, joins the matching Socket.io room, and stores the name and room code on the socket. A socket belongs to only one study room at a time; switching rooms removes the prior membership.
 
-The room page remembers successful display names in session storage and rejoins after refresh or reconnection. Disconnecting removes the socket from its rooms. The room view confirms your membership and shows the online member list; the shared timer will be added separately.
+The room page remembers successful display names in session storage and rejoins after refresh or reconnection. Disconnecting removes the socket from its rooms. The room view confirms your membership and shows the online member list; the shared timer is available to all joined members.
 
 Verify with two browser tabs: join the same room with different names, refresh one tab, and restart the backend. Each tab should confirm its own name after reconnecting. Also try an invalid code, a nonexistent code, and a blank display name. Automated socket tests cover validation, room isolation, room switching, and disconnecting during lookup.
 
@@ -141,3 +141,13 @@ Joined users can send messages of 1–500 characters. The backend trims content,
 The client subscribes to live updates before loading history, merges by message ID to avoid duplicates or losing messages during the history request, and reloads recent history after reconnecting. A reconnect retrieves the latest 50 messages; older missed messages are not paginated yet. The chat shows sender names, timestamps, loading/error states, and an empty state.
 
 Apply the message migration with `npm run db:deploy -w server` before starting the backend. For verification, join one room in two tabs, send messages in both directions, and refresh to confirm history persists. Use a different room to check isolation. Tests cover membership and content validation, sender spoofing, persistence failures, live/history merging, room isolation, and the 50-message history limit.
+
+## Shared Pomodoro timer
+
+Each room has a 25-minute focus timer and a 5-minute break timer. Any joined member can start, pause, or reset it. Reset pauses the current mode at its full duration. When a countdown completes, the server switches modes and pauses until someone starts the next session.
+
+The server owns timer state and timestamps. `timer:start`, `timer:pause`, and `timer:reset` require membership in the supplied room and acknowledge success or a readable error. `timer:state` is sent on joins and state changes, including completion, only to the affected room. Countdown ticks are rendered locally instead of broadcast each second. The client anchors the countdown to server time and uses a monotonic clock between updates, avoiding dependence on the user's wall-clock setting. Network latency can still cause small display differences.
+
+Late joins and reconnects receive the current authoritative state. Pause retains fractional seconds, preventing repeated pause/resume actions from adding time. Timers continue while a room is empty. State is currently held in server memory and resets when the backend restarts; PostgreSQL timer persistence is the next step.
+
+Verify with two tabs: start in one, pause in the other, and reset from either. Join another tab while running and confirm its remaining time matches. Another room's timer should remain unchanged. Automated tests use a controlled clock to verify both mode transitions, delayed completion, cancelled timeouts, pause/resume math, membership validation, and room isolation.
