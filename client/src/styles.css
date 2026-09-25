@@ -168,3 +168,21 @@ h2 { font-size: 1.18rem; letter-spacing: -.025em; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
 }
+.invite-room { flex-shrink: 0; max-width: 100%; }
+.invite-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.invite-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: .76rem; padding: 10px 14px; }
+.invite-actions svg { width: 17px; height: 17px; stroke: currentColor; stroke-width: 1.5; }
+.invite-fallback { margin-top: 12px; max-width: 330px; }
+.invite-fallback label { display: block; font-size: .72rem; margin-bottom: 7px; color: var(--muted); }
+.invite-fallback input { font-size: .75rem; }
+.timer-progress { height: 5px; border-radius: 10px; background: #dce4d2; max-width: 224px; margin: 24px auto 0; overflow: hidden; }
+.timer-progress span { display: block; height: 100%; background: #71885b; border-radius: inherit; }
+.is-break .timer-progress { background: #e9dccb; }
+.is-break .timer-progress span { background: #ad825b; }
+@media (min-width: 681px) and (max-width: 900px) {
+  .room-header { align-items: flex-start; }
+  .invite-actions { flex-direction: column; align-items: flex-end; gap: 8px; }
+}
+@media (max-width: 680px) {
+  .invite-actions { justify-content: space-between; gap: 10px; }
+}

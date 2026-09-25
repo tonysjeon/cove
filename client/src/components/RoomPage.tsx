@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import Chat from './Chat'
+import InviteRoom from './InviteRoom'
 import { joinRoomSession } from '../socket/room-session'
 import Timer from './Timer'
 import { apiUrl } from '../config'
@@ -119,7 +120,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
         : !room ? <div className="room-notice"><h1 id="room-title">Making room for you…</h1><p role="status">Loading your space</p></div> : <>
         <header className="room-header">
           <div><p className="eyebrow">Your shared space</p><h1 id="room-title">{room.name}</h1><p>A little company makes a difference.</p></div>
-          <span className="room-code">Room <strong>{room.code}</strong></span>
+          <InviteRoom key={room.code} roomCode={room.code} />
         </header>
         <div className="room-layout">
           <div className="room-main">

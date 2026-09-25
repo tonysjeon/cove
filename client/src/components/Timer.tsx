@@ -72,12 +72,16 @@ export default function Timer({ roomCode, joined }: { roomCode: string; joined: 
     ? Math.max(0, received.update.serverNow - timer.startedAt) : 0
   const elapsedSinceReceipt = timer.status === 'running' ? Math.max(0, now - received.receivedAt) : 0
   const seconds = Math.max(0, Math.ceil(timer.remainingSeconds - (elapsedAtReceipt + elapsedSinceReceipt) / 1000))
+  const progress = Math.min(100, Math.max(0, (1 - seconds / timer.durationSeconds) * 100))
   const display = `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`
   return (
     <section className={`timer ${timer.mode === 'break' ? 'is-break' : ''}`} aria-label="Shared Pomodoro timer">
       <div className="timer-heading"><span className="eyebrow">A moment, together</span><h2>{timer.mode === 'focus' ? 'Time to focus' : 'Take a breather'}</h2></div>
       <p className="timer-value" role="timer" aria-label={`${timer.mode} time remaining`}>{display}</p>
       <p className="timer-status" role="status">{seconds === 0 && timer.status === 'running' ? 'Waiting for the next session…' : timer.status === 'running' ? 'You’ve got this' : 'Ready when you are'}</p>
+      <div className="timer-progress" role="progressbar" aria-label="Session progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(progress)} aria-valuetext={`${Math.floor(progress)} percent complete`}>
+        <span style={{ width: `${progress}%` }} />
+      </div>
       <div className="timer-controls">
         <button type="button" disabled={pending || timer.status === 'running'} onClick={() => act('start')}>Start</button>
         <button className="button-secondary" type="button" disabled={pending || timer.status === 'paused'} onClick={() => act('pause')}>Pause</button>
