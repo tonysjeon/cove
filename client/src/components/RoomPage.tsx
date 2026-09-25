@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import Chat from './Chat'
+import Timer from './Timer'
 import { apiUrl } from '../config'
 import { socket } from '../socket/socket'
 import type { Room, JoinResult, ConnectedUser, Presence } from '../../../server/src/types/rooms'
@@ -124,6 +125,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
       {loadError ? <p role="alert">{loadError}</p> : !room ? <p role="status">Loading room…</p> : <>
         <h2>{room.name}</h2>
         <p>Room {room.code}</p>
+        <Timer key={roomCode} roomCode={roomCode} joined={!!joinedName} />
         {joinedName ? <>
           <p role="status">Joined as {joinedName}</p>
           <aside className="members" aria-label="Online members">

@@ -1,5 +1,6 @@
 import type { Server as HttpServer } from 'node:http'
 import { Server } from 'socket.io'
+import { createTimers } from '../services/timers.js'
 import { saveMessage } from '../services/messages.js'
 import { getRoom, normalizeRoomCode } from '../services/rooms.js'
 import type { ClientToServerEvents, ServerToClientEvents, SocketData, ConnectedUser } from '../types/rooms.js'
@@ -8,6 +9,9 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(server, {
     cors: { origin: clientUrl },
   })
+  const timers = createTimers(update => io.to(update.roomCode).emit('timer:state', update))
+  server.once('close', () => timers.dispose())
+
   function broadcastPresence(roomCode: string) {
     const members: ConnectedUser[] = []
     for (const socketId of io.sockets.adapter.rooms.get(roomCode) || []) {
@@ -50,11 +54,29 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
         socket.data.displayName = displayName
         acknowledge({ success: true, room, displayName })
         broadcastPresence(roomCode)
+        socket.emit('timer:state', timers.snapshot(roomCode))
       }).catch(error => {
         console.error('Room join failed', error)
         if (socket.connected) acknowledge({ success: false, error: 'JOIN_FAILED' })
       })
     })
+    for (const action of ['start', 'pause', 'reset'] as const) {
+      socket.on(`timer:${action}`, (input, acknowledge) => {
+        if (typeof acknowledge !== 'function') return
+        pending = pending.then(() => {
+          if (!socket.connected) return
+          const roomCode = normalizeRoomCode(input?.roomCode)
+          if (!roomCode || socket.data.roomCode !== roomCode || !socket.rooms.has(roomCode)) {
+            acknowledge({ success: false, error: 'NOT_IN_ROOM' })
+            return
+          }
+          acknowledge(timers.act(roomCode, action))
+        }).catch(error => {
+          console.error('Timer action failed', error)
+          if (socket.connected) acknowledge({ success: false, error: 'TIMER_FAILED' })
+        })
+      })
+    }
     socket.on('chat:send', (input, acknowledge) => {
       if (typeof acknowledge !== 'function') return
       pending = pending.then(async () => {
