@@ -1,8 +1,9 @@
 import cors from 'cors'
+import { getRecentMessages } from './services/messages.js'
 import express, { type ErrorRequestHandler } from 'express'
 import { createRoom, getRoom, normalizeRoomCode } from './services/rooms.js'
 
-export function createApp(clientUrl: string, saveRoom = createRoom, findRoom = getRoom) {
+export function createApp(clientUrl: string, saveRoom = createRoom, findRoom = getRoom, listMessages = getRecentMessages) {
   const app = express()
   app.use(cors({ origin: clientUrl }))
   app.use(express.json())
@@ -15,6 +16,12 @@ export function createApp(clientUrl: string, saveRoom = createRoom, findRoom = g
     const room = await findRoom(code)
     if (!room) { response.status(404).json({ error: 'ROOM_NOT_FOUND' }); return }
     response.json(room)
+  })
+  app.get('/api/rooms/:roomCode/messages', async (request, response) => {
+    const code = normalizeRoomCode(request.params.roomCode)
+    if (!code) { response.status(400).json({ error: 'INVALID_ROOM_CODE' }); return }
+    if (!await findRoom(code)) { response.status(404).json({ error: 'ROOM_NOT_FOUND' }); return }
+    response.json(await listMessages(code))
   })
   app.post('/api/rooms', async (request, response) => {
     const name: unknown = request.body?.name
