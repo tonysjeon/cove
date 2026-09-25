@@ -66,24 +66,28 @@ export default function Timer({ roomCode, joined }: { roomCode: string; joined: 
   }
 
   if (!joined) return null
-  if (!received || !timer) return <p role="status">Loading shared timer…</p>
+  if (!received || !timer) return <div className="timer timer-loading" role="status">Getting the timer ready…</div>
   // Anchor to server time on receipt, then use a monotonic browser clock.
   const elapsedAtReceipt = timer.status === 'running' && timer.startedAt !== null
     ? Math.max(0, received.update.serverNow - timer.startedAt) : 0
   const elapsedSinceReceipt = timer.status === 'running' ? Math.max(0, now - received.receivedAt) : 0
   const seconds = Math.max(0, Math.ceil(timer.remainingSeconds - (elapsedAtReceipt + elapsedSinceReceipt) / 1000))
+  const progress = Math.min(100, Math.max(0, (1 - seconds / timer.durationSeconds) * 100))
   const display = `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`
   return (
-    <section className="timer" aria-label="Shared Pomodoro timer">
-      <h3>{timer.mode === 'focus' ? 'Focus' : 'Break'}</h3>
+    <section className={`timer ${timer.mode === 'break' ? 'is-break' : ''}`} aria-label="Shared Pomodoro timer">
+      <div className="timer-heading"><span className="eyebrow">A moment, together</span><h2>{timer.mode === 'focus' ? 'Time to focus' : 'Take a breather'}</h2></div>
       <p className="timer-value" role="timer" aria-label={`${timer.mode} time remaining`}>{display}</p>
-      <p role="status">{seconds === 0 && timer.status === 'running' ? 'Waiting for the next session…' : timer.status === 'running' ? 'Running' : 'Paused'}</p>
+      <p className="timer-status" role="status">{seconds === 0 && timer.status === 'running' ? 'Waiting for the next session…' : timer.status === 'running' ? 'Running · you’ve got this' : 'Paused · ready when you are'}</p>
+      <div className="timer-progress" role="progressbar" aria-label="Session progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(progress)} aria-valuetext={`${Math.floor(progress)} percent complete`}>
+        <span style={{ width: `${progress}%` }} />
+      </div>
       <div className="timer-controls">
         <button type="button" disabled={pending || timer.status === 'running'} onClick={() => act('start')}>Start</button>
-        <button type="button" disabled={pending || timer.status === 'paused'} onClick={() => act('pause')}>Pause</button>
-        <button type="button" disabled={pending} onClick={() => act('reset')}>Reset</button>
+        <button className="button-secondary" type="button" disabled={pending || timer.status === 'paused'} onClick={() => act('pause')}>Pause</button>
+        <button className="button-quiet" type="button" disabled={pending} onClick={() => act('reset')}>Reset</button>
       </div>
-      <p>Focus: 25 min · Break: 5 min</p>
+      <p className="timer-caption">25 min focus <span aria-hidden="true">·</span> 5 min break</p>
       {error && <p role="alert">{error}</p>}
     </section>
   )

@@ -19,7 +19,7 @@ npm run db:deploy -w server
 npm run dev
 ```
 
-Open http://localhost:5173 to see the frontend and backend connection status.
+Open http://localhost:5173 to create or find a room. The header only shows a connection notice while connecting or reconnecting.
 The server runs at http://localhost:3001.
 
 To run each service separately, use `npm run dev -w client` and `npm run dev -w server` in separate terminals.
@@ -61,20 +61,20 @@ Use `npm run preview -w client` to preview the frontend build; set `CLIENT_URL` 
 ## Manual verification
 
 1. Run `npm run dev` and open http://localhost:5173
-2. Confirm the page shows **Backend connected**
+2. Confirm the page loads and the **Connecting…** notice clears
 3. Open http://localhost:3001/api/health and confirm the response is `{"status":"ok"}`
-4. Stop the backend and refresh the frontend to verify the waiting message
+4. Stop the backend and verify the header shows **Reconnecting…**, then restart it and confirm the room recovers
 
-The frontend fetches the health endpoint directly, so this also verifies the browser CORS configuration.
+The health endpoint remains available for diagnostics; the interface uses the live socket connection to show connection status.
 
 ## Live connection
 
 Socket.io shares the backend HTTP server and uses the same `CLIENT_URL` CORS origin.
 The frontend keeps one socket instance in `client/src/socket/socket.ts` and uses `VITE_API_URL` for both HTTP and socket connections.
 Connection listeners are cleaned up when the app unmounts, and interrupted connections retry automatically.
-The API health check runs when the live connection connects or reconnects; disconnecting clears the previous health result.
+A quiet header notice appears only while connecting or reconnecting; a healthy connection needs no badge.
 
-To verify reconnection, run the client and server in separate terminals and open two tabs at http://localhost:5173. Both should show **Live connection: Connected**. Stop the backend and check that both statuses change, then restart it and confirm both reconnect without refreshing. Refresh or close one tab and check the server connection and disconnection logs.
+To verify reconnection, run the client and server in separate terminals and open two tabs at http://localhost:5173. The connection notice should clear in both tabs. Stop the backend and check that both statuses change, then restart it and confirm both reconnect without refreshing. Refresh or close one tab and check the server connection and disconnection logs.
 
 ## Local PostgreSQL on macOS
 
@@ -169,3 +169,13 @@ Room loading and chat history requests time out after eight seconds and offer re
 Disconnecting clears presence and timer controls until membership is restored. Chat retains its loaded messages and unsent draft. An interrupted send shows an unconfirmed-delivery message, preserves the draft, and ignores stale acknowledgements. It never automatically resends; check the restored history before sending again to avoid duplicates. Drafts are held in memory and do not survive a page refresh.
 
 To verify recovery, join a room, enter an unsent draft, and stop the backend. Confirm the draft remains visible and controls are disabled. Open the same room in a second tab while offline, then restart the backend. The first tab should rejoin with its draft intact, restore presence and timer state, and reload history; the second should load the room without a refresh. Automated membership tests cover transient retries, permanent errors, stale acknowledgements, and cleanup.
+
+## Interface and accessibility
+
+The home page and room share a warm neutral palette, soft green accents, and responsive layouts. Desktop rooms keep the timer and chat beside the member list; narrow screens stack them. Connection notices only appear while connecting or reconnecting, keeping the header quiet when everything is working.
+
+**Copy invite** copies a link built from the current site origin. If clipboard access is unavailable, a selected read-only field offers the link for manual copying. The timer progress bar reflects server-authoritative session time, with focus and break colors and accessible progress values.
+
+Chat scrolls within its own message list. Reading older messages pauses automatic scrolling and exposes **New messages** when updates arrive. **Ctrl + Enter** or **⌘ + Enter** sends a message; Enter inserts a new line. Focus returns to the composer after sending. Forms have associated labels and error descriptions, controls have visible keyboard focus, and the page has a skip-to-content link.
+
+Verify desktop and narrow mobile layouts, keyboard navigation, invite copying, empty states, invalid codes, and two-tab timer and chat updates. Check that loading history does not move the entire page, and new messages do not interrupt reading older chat.
