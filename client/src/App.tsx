@@ -34,10 +34,9 @@ export default function App() {
       <header className="site-header">
         <a className="brand" href="/" aria-label="cove home">
           <svg viewBox="0 0 32 32" aria-hidden="true">
-            <path d="M5 25V15a11 11 0 0 1 22 0v10a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3Z" />
-            <circle cx="12" cy="15" r="1.5" />
-            <circle cx="20" cy="15" r="1.5" />
-            <path d="M9 23v-1a3 3 0 0 1 6 0v1m2 0v-1a3 3 0 0 1 6 0v1" />
+            <path fill="#7b8e6c" d="M10 5a8 8 0 0 0-8 8v6a8 8 0 0 0 8 8 2 2 0 0 0 0-4 4 4 0 0 1-4-4v-6a4 4 0 0 1 4-4 2 2 0 0 0 0-4Z" />
+            <path fill="#c49475" d="M22 5a8 8 0 0 1 8 8v6a8 8 0 0 1-8 8 2 2 0 0 1 0-4 4 4 0 0 0 4-4v-6a4 4 0 0 0-4-4 2 2 0 0 1 0-4Z" />
+            <circle fill="#d9bb90" cx="16" cy="16" r="4.5" />
           </svg>
           cove<span className="brand-dot">.</span>
         </a>

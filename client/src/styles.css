@@ -35,7 +35,7 @@ h2 { font-size: 1.18rem; letter-spacing: -.025em; }
 .app-shell { width: min(1120px, calc(100% - 80px)); margin: 0 auto; }
 .site-header { height: 88px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
 .brand { display: inline-flex; align-items: center; font-size: 2.2rem; font-weight: 650; letter-spacing: -.08em; text-decoration: none; line-height: 1; }
-.brand svg { width: 32px; height: 32px; margin-right: 9px; fill: none; stroke: var(--green); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.brand svg { width: 32px; height: 32px; margin-right: 9px; }
 .brand-dot { color: #bd8663; }
 .connection-notice { display: flex; align-items: center; gap: 8px; font-size: .76rem; color: #79613c; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
