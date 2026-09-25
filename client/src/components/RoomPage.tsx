@@ -60,7 +60,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
         const data = await response.json() as Room
         if (active) { loaded = true; setRoom(data); setRequestedName(savedName(roomCode)) }
       } catch (error) {
-        if (active) setLoadError(controller.signal.aborted ? 'Loading timed out — please try again' : error instanceof Error ? error.message : 'Unable to load the room')
+        if (active) setLoadError(controller.signal.aborted ? 'Loading timed out — please try again' : error instanceof TypeError ? 'We couldn’t reach your room — please try again' : error instanceof Error ? error.message : 'Unable to load the room')
       } finally {
         clearTimeout(timeout)
       }
@@ -130,17 +130,17 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
               <p>{requestedName && !joinError ? 'We’ll bring you back into the room as soon as we can.' : 'What should your friends call you?'}</p>
               <form onSubmit={submit} className="room-form">
                 <label htmlFor="display-name">Display name</label>
-                <input id="display-name" value={name} onChange={event => setName(event.target.value)} maxLength={30} required autoComplete="nickname" placeholder="Your name" />
+                <input id="display-name" aria-invalid={!!joinError} aria-describedby={joinError ? 'name-error' : undefined} value={name} onChange={event => setName(event.target.value)} maxLength={30} required autoComplete="nickname" placeholder="Your name" />
                 <button type="submit" disabled={!socket.connected || !!status}>Join room</button>
               </form>
               {status && <p className="inline-status" role="status">{status}</p>}
-              {joinError && <p role="alert">{joinError}</p>}
+              {joinError && <p id="name-error" role="alert">{joinError}</p>}
             </section>}
             <Timer key={`timer:${roomCode}`} roomCode={roomCode} joined={!!joinedName} />
             <Chat key={`chat:${roomCode}`} roomCode={roomCode} joined={!!joinedName} />
           </div>
           <aside className="members" aria-label="Online members">
-            <header className="panel-heading"><h2>In good company</h2><span className="member-count" aria-label={`${members.length} online`}>{members.length}</span></header>
+            <header className="panel-heading"><h2>In good company</h2><span className="member-count" aria-live="polite" aria-label={joinedName ? `${members.length} online` : 'Join to see online friends'}>{joinedName ? members.length : '—'}</span></header>
             {joinedName ? <>
               <p className="panel-description">Here with you right now</p>
               <ul>{members.map(member => <li key={member.socketId}>

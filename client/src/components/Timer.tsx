@@ -66,7 +66,7 @@ export default function Timer({ roomCode, joined }: { roomCode: string; joined: 
   }
 
   if (!joined) return null
-  if (!received || !timer) return <p className="timer-status" role="status">Loading shared timer…</p>
+  if (!received || !timer) return <div className="timer timer-loading" role="status">Getting the timer ready…</div>
   // Anchor to server time on receipt, then use a monotonic browser clock.
   const elapsedAtReceipt = timer.status === 'running' && timer.startedAt !== null
     ? Math.max(0, received.update.serverNow - timer.startedAt) : 0
@@ -78,7 +78,7 @@ export default function Timer({ roomCode, joined }: { roomCode: string; joined: 
     <section className={`timer ${timer.mode === 'break' ? 'is-break' : ''}`} aria-label="Shared Pomodoro timer">
       <div className="timer-heading"><span className="eyebrow">A moment, together</span><h2>{timer.mode === 'focus' ? 'Time to focus' : 'Take a breather'}</h2></div>
       <p className="timer-value" role="timer" aria-label={`${timer.mode} time remaining`}>{display}</p>
-      <p className="timer-status" role="status">{seconds === 0 && timer.status === 'running' ? 'Waiting for the next session…' : timer.status === 'running' ? 'You’ve got this' : 'Ready when you are'}</p>
+      <p className="timer-status" role="status">{seconds === 0 && timer.status === 'running' ? 'Waiting for the next session…' : timer.status === 'running' ? 'Running · you’ve got this' : 'Paused · ready when you are'}</p>
       <div className="timer-progress" role="progressbar" aria-label="Session progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(progress)} aria-valuetext={`${Math.floor(progress)} percent complete`}>
         <span style={{ width: `${progress}%` }} />
       </div>
