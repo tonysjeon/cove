@@ -63,7 +63,7 @@ Use `npm run preview -w client` to preview the frontend build; set `CLIENT_URL` 
 1. Run `npm run dev` and open http://localhost:5173
 2. Confirm the page shows **Backend connected**
 3. Open http://localhost:3001/api/health and confirm the response is `{"status":"ok"}`
-4. Stop the backend and refresh the frontend to verify the unavailable message
+4. Stop the backend and refresh the frontend to verify the waiting message
 
 The frontend fetches the health endpoint directly, so this also verifies the browser CORS configuration.
 
@@ -72,7 +72,7 @@ The frontend fetches the health endpoint directly, so this also verifies the bro
 Socket.io shares the backend HTTP server and uses the same `CLIENT_URL` CORS origin.
 The frontend keeps one socket instance in `client/src/socket/socket.ts` and uses `VITE_API_URL` for both HTTP and socket connections.
 Connection listeners are cleaned up when the app unmounts, and interrupted connections retry automatically.
-The API health check runs on page load; the live connection status updates continuously.
+The API health check runs when the live connection connects or reconnects; disconnecting clears the previous health result.
 
 To verify reconnection, run the client and server in separate terminals and open two tabs at http://localhost:5173. Both should show **Live connection: Connected**. Stop the backend and check that both statuses change, then restart it and confirm both reconnect without refreshing. Refresh or close one tab and check the server connection and disconnection logs.
 
@@ -161,3 +161,11 @@ Startup loads running timers and reschedules completion using their saved timest
 If a save fails, the previous state remains authoritative and the action returns an error. Failed automatic completions retry after one second. Startup fails if running timers cannot be loaded, rather than silently resetting them. This design supports one backend process; coordination across multiple servers is not implemented.
 
 Verification: start a timer, restart the backend, and confirm it resumes with elapsed downtime deducted. Repeat with a paused timer and confirm it remains paused at the same value. Automated recovery tests cover PostgreSQL reconnection, expired sessions, fractional timing, concurrent controls, and failed saves.
+
+## Connection recovery
+
+Room loading and chat history requests time out after eight seconds and offer retry buttons. A room opened while the backend is offline reloads automatically when the socket connects. Membership retries transient failures while connected and ignores acknowledgements from earlier connections; invalid names and missing rooms remain visible for correction.
+
+Disconnecting clears presence and timer controls until membership is restored. Chat retains its loaded messages and unsent draft. An interrupted send shows an unconfirmed-delivery message, preserves the draft, and ignores stale acknowledgements. It never automatically resends; check the restored history before sending again to avoid duplicates. Drafts are held in memory and do not survive a page refresh.
+
+To verify recovery, join a room, enter an unsent draft, and stop the backend. Confirm the draft remains visible and controls are disabled. Open the same room in a second tab while offline, then restart the backend. The first tab should rejoin with its draft intact, restore presence and timer state, and reload history; the second should load the room without a refresh. Automated membership tests cover transient retries, permanent errors, stale acknowledgements, and cleanup.

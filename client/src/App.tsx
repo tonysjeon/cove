@@ -30,6 +30,11 @@ export default function App() {
   const [status, setStatus] = useState('Checking connection…')
 
   useEffect(() => {
+    if (connection !== 'Connected') {
+      setStatus('Waiting for the backend…')
+      return
+    }
+    setStatus('Checking connection…')
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 5000)
     let active = true
@@ -44,7 +49,7 @@ export default function App() {
         }
         if (active) setStatus('Backend connected')
       } catch {
-        if (active) setStatus('Backend unavailable — check that the server is running, then refresh')
+        if (active) setStatus('Backend health check failed')
       } finally {
         window.clearTimeout(timeout)
       }
@@ -56,7 +61,7 @@ export default function App() {
       window.clearTimeout(timeout)
       controller.abort()
     }
-  }, [])
+  }, [connection])
 
   const roomCode = window.location.pathname.match(/^\/room\/([^/]+)\/?$/)?.[1]
 
