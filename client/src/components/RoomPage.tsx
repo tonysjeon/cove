@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import Chat from './Chat'
+import { joinRoomSession } from '../socket/room-session'
 import Timer from './Timer'
 import { apiUrl } from '../config'
 import { socket } from '../socket/socket'
@@ -19,6 +20,7 @@ function savedName(roomCode: string) {
 export default function RoomPage({ roomCode }: { roomCode: string }) {
   const [room, setRoom] = useState<Room | null>(null)
   const [loadError, setLoadError] = useState('')
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [name, setName] = useState(() => savedName(roomCode))
   const [requestedName, setRequestedName] = useState('')
   const [joinedName, setJoinedName] = useState('')
@@ -42,7 +44,10 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
 
   useEffect(() => {
     const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
     let active = true
+    let loaded = false
+    setLoadError('')
     async function loadRoom() {
       try {
         const response = await fetch(`${apiUrl}/api/rooms/${encodeURIComponent(roomCode)}`, {
@@ -50,50 +55,37 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
         })
         if (response.status === 404) throw new Error('This room does not exist')
         if (response.status === 400) throw new Error('This room code is invalid')
-        if (!response.ok) throw new Error('Unable to load the room — please refresh to try again')
+        if (!response.ok) throw new Error('Unable to load the room — please try again')
         const data = await response.json() as Room
-        if (active) { setRoom(data); setRequestedName(savedName(roomCode)) }
+        if (active) { loaded = true; setRoom(data); setRequestedName(savedName(roomCode)) }
       } catch (error) {
-        if (active) setLoadError(error instanceof Error ? error.message : 'Unable to load the room')
+        if (active) setLoadError(controller.signal.aborted ? 'Loading timed out — please try again' : error instanceof Error ? error.message : 'Unable to load the room')
+      } finally {
+        clearTimeout(timeout)
       }
     }
     void loadRoom()
-    return () => { active = false; controller.abort() }
-  }, [roomCode])
+    const retryLoad = () => { if (!loaded) setLoadAttempt(value => value + 1) }
+    socket.on('connect', retryLoad)
+    return () => { active = false; clearTimeout(timeout); controller.abort(); socket.off('connect', retryLoad) }
+  }, [roomCode, loadAttempt])
 
   useEffect(() => {
     if (!room || !requestedName) return
-    let active = true
-    let generation = 0
-    function join() {
-      const current = ++generation
-      setJoinedName('')
-      setMembers([])
-      setStatus('Joining room…')
-      setJoinError('')
-      socket.timeout(8000).emit('room:join', { roomCode, displayName: requestedName }, (error, result) => {
-        if (!active || current !== generation) return
+    return joinRoomSession(socket, roomCode, requestedName, {
+      waiting(status) {
+        setJoinedName('')
+        setMembers([])
+        setStatus(status)
+        setJoinError('')
+      },
+      result(result) {
         setStatus('')
-        if (error) { setJoinError('Joining timed out — please try again'); return }
         if (!result.success) { setJoinError(errors[result.error]); return }
         setJoinedName(result.displayName)
         try { sessionStorage.setItem(`cove:name:${roomCode}`, result.displayName) } catch { /* Storage is optional. */ }
-      })
-    }
-    function disconnected() {
-      generation++
-      setJoinedName('')
-      setStatus('Disconnected — waiting to rejoin…')
-    }
-    socket.on('connect', join)
-    socket.on('disconnect', disconnected)
-    if (socket.connected) join()
-    else setStatus('Waiting for a connection…')
-    return () => {
-      active = false
-      socket.off('connect', join)
-      socket.off('disconnect', disconnected)
-    }
+      },
+    })
   }, [room, roomCode, requestedName, attempt])
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -122,7 +114,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
 
   return (
     <section>
-      {loadError ? <p role="alert">{loadError}</p> : !room ? <p role="status">Loading room…</p> : <>
+      {loadError ? <p role="alert">{loadError} <button type="button" onClick={() => setLoadAttempt(value => value + 1)}>Retry room</button></p> : !room ? <p role="status">Loading room…</p> : <>
         <h2>{room.name}</h2>
         <p>Room {room.code}</p>
         <Timer key={`timer:${roomCode}`} roomCode={roomCode} joined={!!joinedName} />
