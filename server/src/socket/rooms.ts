@@ -1,15 +1,17 @@
 import type { Server as HttpServer } from 'node:http'
 import { Server } from 'socket.io'
+import { memoryTimerStore, type TimerStore } from '../services/timer-store.js'
 import { createTimers } from '../services/timers.js'
 import { saveMessage } from '../services/messages.js'
 import { getRoom, normalizeRoomCode } from '../services/rooms.js'
 import type { ClientToServerEvents, ServerToClientEvents, SocketData, ConnectedUser } from '../types/rooms.js'
 
-export function createRoomServer(server: HttpServer, clientUrl: string, findRoom = getRoom, persistMessage = saveMessage) {
+export function createRoomServer(server: HttpServer, clientUrl: string, findRoom = getRoom, persistMessage = saveMessage, timerStore: TimerStore = memoryTimerStore()) {
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(server, {
     cors: { origin: clientUrl },
   })
-  const timers = createTimers(update => io.to(update.roomCode).emit('timer:state', update))
+  const timers = createTimers(update => io.to(update.roomCode).emit('timer:state', update), () => Date.now(), timerStore)
+  const timerReady = timers.restore()
   server.once('close', () => timers.dispose())
 
   function broadcastPresence(roomCode: string) {
@@ -41,6 +43,9 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
         const room = await findRoom(roomCode)
         if (!socket.connected) return
         if (!room) { acknowledge({ success: false, error: 'ROOM_NOT_FOUND' }); return }
+        await timerReady
+        const timerState = await timers.snapshot(roomCode)
+        if (!socket.connected) return
         const previousRoom = socket.data.roomCode
         if (previousRoom && previousRoom !== roomCode) {
           await socket.leave(previousRoom)
@@ -54,7 +59,7 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
         socket.data.displayName = displayName
         acknowledge({ success: true, room, displayName })
         broadcastPresence(roomCode)
-        socket.emit('timer:state', timers.snapshot(roomCode))
+        socket.emit('timer:state', timerState)
       }).catch(error => {
         console.error('Room join failed', error)
         if (socket.connected) acknowledge({ success: false, error: 'JOIN_FAILED' })
@@ -63,14 +68,15 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
     for (const action of ['start', 'pause', 'reset'] as const) {
       socket.on(`timer:${action}`, (input, acknowledge) => {
         if (typeof acknowledge !== 'function') return
-        pending = pending.then(() => {
+        pending = pending.then(async () => {
           if (!socket.connected) return
           const roomCode = normalizeRoomCode(input?.roomCode)
           if (!roomCode || socket.data.roomCode !== roomCode || !socket.rooms.has(roomCode)) {
             acknowledge({ success: false, error: 'NOT_IN_ROOM' })
             return
           }
-          acknowledge(timers.act(roomCode, action))
+          await timerReady
+          acknowledge(await timers.act(roomCode, action))
         }).catch(error => {
           console.error('Timer action failed', error)
           if (socket.connected) acknowledge({ success: false, error: 'TIMER_FAILED' })
@@ -123,5 +129,5 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
       console.log(`socket disconnected: ${socket.id} (${reason})`)
     })
   })
-  return io
+  return Object.assign(io, { timerReady, stopTimers: timers.dispose })
 }

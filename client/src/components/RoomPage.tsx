@@ -125,7 +125,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
       {loadError ? <p role="alert">{loadError}</p> : !room ? <p role="status">Loading room…</p> : <>
         <h2>{room.name}</h2>
         <p>Room {room.code}</p>
-        <Timer key={roomCode} roomCode={roomCode} joined={!!joinedName} />
+        <Timer key={`timer:${roomCode}`} roomCode={roomCode} joined={!!joinedName} />
         {joinedName ? <>
           <p role="status">Joined as {joinedName}</p>
           <aside className="members" aria-label="Online members">
@@ -141,7 +141,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
           <input id="display-name" value={name} onChange={event => setName(event.target.value)} maxLength={30} required />
           <button type="submit" disabled={!socket.connected || !!status}>Join room</button>
         </form>}
-        <Chat key={roomCode} roomCode={roomCode} joined={!!joinedName} />
+        <Chat key={`chat:${roomCode}`} roomCode={roomCode} joined={!!joinedName} />
         {status && <p role="status">{status}</p>}
         {joinError && <p role="alert">{joinError}</p>}
       </>}

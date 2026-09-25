@@ -148,6 +148,16 @@ Each room has a 25-minute focus timer and a 5-minute break timer. Any joined mem
 
 The server owns timer state and timestamps. `timer:start`, `timer:pause`, and `timer:reset` require membership in the supplied room and acknowledge success or a readable error. `timer:state` is sent on joins and state changes, including completion, only to the affected room. Countdown ticks are rendered locally instead of broadcast each second. The client anchors the countdown to server time and uses a monotonic clock between updates, avoiding dependence on the user's wall-clock setting. Network latency can still cause small display differences.
 
-Late joins and reconnects receive the current authoritative state. Pause retains fractional seconds, preventing repeated pause/resume actions from adding time. Timers continue while a room is empty. State is currently held in server memory and resets when the backend restarts; PostgreSQL timer persistence is the next step.
+Late joins and reconnects receive the current authoritative state. Pause retains fractional seconds, preventing repeated pause/resume actions from adding time. Timers continue while a room is empty. Timer state is saved in PostgreSQL and recovered when the backend restarts.
 
 Verify with two tabs: start in one, pause in the other, and reset from either. Join another tab while running and confirm its remaining time matches. Another room's timer should remain unchanged. Automated tests use a controlled clock to verify both mode transitions, delayed completion, cancelled timeouts, pause/resume math, membership validation, and room isolation.
+
+## Timer persistence and recovery
+
+Apply committed migrations with `npm run db:deploy -w server` before starting the backend. Timer actions and mode transitions are saved before acknowledgement or broadcast. Per-room queues serialize timer changes from different sockets so concurrent controls cannot overwrite each other in the single-server deployment.
+
+Startup loads running timers and reschedules completion using their saved timestamps. If a session ended during downtime, the server saves the next mode at its full duration, paused; it does not simulate additional sessions that nobody started. Paused timers load on demand and preserve fractional remaining seconds. Reset is also persisted. Graceful shutdown drains pending timer writes before disconnecting the database.
+
+If a save fails, the previous state remains authoritative and the action returns an error. Failed automatic completions retry after one second. Startup fails if running timers cannot be loaded, rather than silently resetting them. This design supports one backend process; coordination across multiple servers is not implemented.
+
+Verification: start a timer, restart the backend, and confirm it resumes with elapsed downtime deducted. Repeat with a paused timer and confirm it remains paused at the same value. Automated recovery tests cover PostgreSQL reconnection, expired sessions, fractional timing, concurrent controls, and failed saves.
