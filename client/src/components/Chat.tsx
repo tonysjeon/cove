@@ -15,18 +15,32 @@ export default function Chat({ roomCode, joined }: { roomCode: string; joined: b
   const [retry, setRetry] = useState(0)
   const end = useRef<HTMLDivElement>(null)
   const inFlight = useRef(false)
+  const generation = useRef(0)
 
   useEffect(() => {
     function receive(update: ChatUpdate) {
       if (update.roomCode === roomCode) setMessages(current => mergeMessages(current, [update.message]))
     }
+    function disconnected() {
+      generation.current++
+      if (inFlight.current) setSendError('Delivery is unconfirmed — check the chat before trying again')
+      inFlight.current = false
+      setSending(false)
+    }
     socket.on('chat:newMessage', receive)
-    return () => { socket.off('chat:newMessage', receive) }
+    socket.on('disconnect', disconnected)
+    return () => {
+      generation.current++
+      inFlight.current = false
+      socket.off('chat:newMessage', receive)
+      socket.off('disconnect', disconnected)
+    }
   }, [roomCode])
 
   useEffect(() => {
     if (!joined) return
     const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
     let active = true
     setLoading(true)
     setHistoryError('')
@@ -39,11 +53,12 @@ export default function Chat({ roomCode, joined }: { roomCode: string; joined: b
       } catch {
         if (active) setHistoryError('Could not load recent messages')
       } finally {
+        clearTimeout(timeout)
         if (active) setLoading(false)
       }
     }
     void load()
-    return () => { active = false; controller.abort() }
+    return () => { active = false; clearTimeout(timeout); controller.abort() }
   }, [roomCode, joined, retry])
 
   useEffect(() => { end.current?.scrollIntoView({ block: 'nearest' }) }, [messages])
@@ -53,10 +68,12 @@ export default function Chat({ roomCode, joined }: { roomCode: string; joined: b
     const content = draft.trim()
     if (!joined || !socket.connected || inFlight.current) return
     if (!content || content.length > 500) { setSendError('Enter a message between 1 and 500 characters'); return }
+    const current = ++generation.current
     inFlight.current = true
     setSending(true)
     setSendError('')
     socket.timeout(8000).emit('chat:send', { roomCode, content }, (error, result) => {
+      if (current !== generation.current) return
       inFlight.current = false
       setSending(false)
       if (error) { setSendError('Delivery is unconfirmed — check the chat before trying again'); return }
@@ -70,12 +87,12 @@ export default function Chat({ roomCode, joined }: { roomCode: string; joined: b
     })
   }
 
-  if (!joined && !messages.length) return null
+  if (!joined && !messages.length && !draft) return null
   return (
     <section className="chat" aria-label="Room chat">
       <h3>Chat</h3>
       {loading && joined && <p role="status">Loading recent messages…</p>}
-      {historyError && <p role="alert">{historyError} <button type="button" onClick={() => setRetry(value => value + 1)}>Retry history</button></p>}
+      {historyError && <p role="alert">{historyError} <button type="button" disabled={!joined} onClick={() => setRetry(value => value + 1)}>Retry history</button></p>}
       {!loading && !historyError && !messages.length && <p>No messages yet — start the conversation</p>}
       <div className="chat-messages" role="log" aria-label="Room messages" aria-live="polite">
         {messages.map(message => <article key={message.id} className="chat-message">
