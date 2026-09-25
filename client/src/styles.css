@@ -23,8 +23,8 @@ input, textarea { width: 100%; min-width: 0; border: 1px solid #d6dacc; border-r
 input::placeholder, textarea::placeholder { color: #7a8075; opacity: 1; }
 input:disabled, textarea:disabled { background: #f2f2ec; }
 textarea { resize: vertical; min-height: 76px; max-height: 260px; }
-:focus-visible { outline: 3px solid #8d663e; outline-offset: 4px; }
-input:focus-visible, textarea:focus-visible { outline-offset: 2px; }
+:focus-visible { outline: 2px solid #6d8062; outline-offset: 3px; }
+input:focus-visible, textarea:focus-visible { outline-offset: -2px; border-color: #6d8062; }
 h1, h2, h3, p { margin: 0; }
 h1, h2, h3 { font-weight: 550; }
 p { line-height: 1.65; }
@@ -35,10 +35,9 @@ h2 { font-size: 1.18rem; letter-spacing: -.025em; }
 .app-shell { width: min(1120px, calc(100% - 80px)); margin: 0 auto; }
 .site-header { height: 88px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
 .brand { display: inline-flex; align-items: center; font-size: 2.2rem; font-weight: 650; letter-spacing: -.08em; text-decoration: none; line-height: 1; }
-.brand svg { width: 32px; height: 32px; margin-right: 9px; fill: none; stroke: var(--green); stroke-width: 2.4; stroke-linecap: round; }
+.brand svg { width: 32px; height: 32px; margin-right: 9px; fill: none; stroke: var(--green); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .brand-dot { color: #bd8663; }
-.connection-badge { display: flex; align-items: center; gap: 8px; font-size: .76rem; color: #79613c; padding: 8px 12px; border-radius: 30px; background: #f3ecd9; }
-.connection-badge.is-connected { background: #eaf0e5; color: #4c654a; }
+.connection-notice { display: flex; align-items: center; gap: 8px; font-size: .76rem; color: #79613c; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .site-footer { padding: 28px 0; margin-top: 48px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 20px; font-size: .75rem; color: var(--muted); }
 .eyebrow { font-size: .68rem; font-weight: 650; letter-spacing: .16em; text-transform: uppercase; color: #647558; }

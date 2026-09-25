@@ -42,7 +42,7 @@ export default function CreateRoom() {
 
   return (
     <form onSubmit={handleSubmit} className="room-form" aria-labelledby="create-title">
-      <div className="form-heading"><span className="section-mark" aria-hidden="true">+</span><h2 id="create-title">Make a little space</h2><p>Start a room and invite your favorite people.</p></div>
+      <div className="form-heading"><h2 id="create-title">Make a little space</h2><p>Start a room and invite your favorite people.</p></div>
       <label htmlFor="room-name">Room name</label>
       <input id="room-name" aria-invalid={!!error} aria-describedby={error ? 'create-error' : undefined} value={name} onChange={event => setName(event.target.value)}
         maxLength={80} required placeholder="e.g. The afternoon club" disabled={pending} />

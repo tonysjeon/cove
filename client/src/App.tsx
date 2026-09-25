@@ -33,12 +33,19 @@ export default function App() {
       <a className="skip-link" href="#main-content">Skip to content</a>
       <header className="site-header">
         <a className="brand" href="/" aria-label="cove home">
-          <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 14c4-8 18-8 22 0M5 20c4-8 18-8 22 0M8 26c4-5 12-5 16 0" /></svg>
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M5 25V15a11 11 0 0 1 22 0v10a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3Z" />
+            <circle cx="12" cy="15" r="1.5" />
+            <circle cx="20" cy="15" r="1.5" />
+            <path d="M9 23v-1a3 3 0 0 1 6 0v1m2 0v-1a3 3 0 0 1 6 0v1" />
+          </svg>
           cove<span className="brand-dot">.</span>
         </a>
-        <span className={`connection-badge ${connection === 'Connected' ? 'is-connected' : ''}`} role="status">
-          <span className="status-dot" aria-hidden="true" />
-          {connection === 'Connected' ? 'Connected' : connection === 'Connecting…' ? 'Connecting…' : 'Reconnecting…'}
+        <span className="connection-status" role="status">
+          {connection !== 'Connected' && <span className="connection-notice">
+            <span className="status-dot" aria-hidden="true" />
+            {connection === 'Connecting…' ? 'Connecting…' : 'Reconnecting…'}
+          </span>}
         </span>
       </header>
       <main id="main-content" tabIndex={-1}>
