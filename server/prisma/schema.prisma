@@ -14,6 +14,7 @@ model Room {
   name      String
   createdAt DateTime @default(now())
   messages  Message[]
+  timer     TimerState?
 }
 
 model Message {
@@ -25,4 +26,16 @@ model Message {
   room       Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@index([roomId, createdAt, id])
+}
+
+model TimerState {
+  roomId           String   @id
+  mode             String
+  status           String
+  durationSeconds  Int
+  remainingSeconds Float
+  startedAt        DateTime?
+  revision         Int
+  updatedAt        DateTime @updatedAt
+  room             Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
 }
