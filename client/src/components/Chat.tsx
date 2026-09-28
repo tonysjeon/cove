@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useReducer, useRef, useState, type FormEvent } from 'react'
+import { updateUnread } from '../chat/unread'
 import { mergeMessages } from '../chat/messages'
 import { apiUrl } from '../config'
 import { socket } from '../socket/socket'
 import type { ChatMessage, ChatUpdate } from '../../../server/src/types/rooms'
 
 
-export default function Chat({ roomCode, joined }: { roomCode: string; joined: boolean }) {
+export default function Chat({ roomCode, joined, open, onClose, onUnreadCountChange }: { roomCode: string; joined: boolean; open: boolean; onClose: () => void; onUnreadCountChange: (count: number) => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
+  const [unread, dispatchUnread] = useReducer(updateUnread, { seen: new Set<string>(), unread: new Set<string>() })
+  const chatOpen = useRef(open)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
   const [historyError, setHistoryError] = useState('')
@@ -22,8 +25,20 @@ export default function Chat({ roomCode, joined }: { roomCode: string; joined: b
   const generation = useRef(0)
 
   useEffect(() => {
+    chatOpen.current = open
+    if (!open) return
+    dispatchUnread({ type: 'read' })
+    const frame = requestAnimationFrame(jumpToLatest)
+    return () => cancelAnimationFrame(frame)
+  }, [open])
+
+  useEffect(() => { onUnreadCountChange(unread.unread.size) }, [unread.unread.size, onUnreadCountChange])
+
+  useEffect(() => {
     function receive(update: ChatUpdate) {
-      if (update.roomCode === roomCode) setMessages(current => mergeMessages(current, [update.message]))
+      if (update.roomCode !== roomCode) return
+      setMessages(current => mergeMessages(current, [update.message]))
+      dispatchUnread({ type: 'received', id: update.message.id, open: chatOpen.current })
     }
     function disconnected() {
       generation.current++
@@ -101,6 +116,7 @@ export default function Chat({ roomCode, joined }: { roomCode: string; joined: b
           : result.error === 'NOT_IN_ROOM' ? 'Rejoin the room before sending a message' : 'Could not send your message — please try again')
         return
       }
+      dispatchUnread({ type: 'sent', id: result.message.id })
       following.current = true
       setMessages(current => mergeMessages(current, [result.message]))
       setDraft('')
@@ -110,33 +126,43 @@ export default function Chat({ roomCode, joined }: { roomCode: string; joined: b
   if (!joined && !messages.length && !draft) return null
   return (
     <section className="chat" aria-label="Room chat">
-      <header className="panel-heading"><div><h2>Room chat</h2><p className="panel-description">A hello, a small win, or just a little encouragement.</p></div><svg className="chat-symbol" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3v-3a2 2 0 0 1-2-2V7a3 3 0 0 1 3-3Z" /><path d="M7 9h10M7 13h6" /></svg></header>
-      {loading && joined && <p role="status">Loading recent messages…</p>}
-      {historyError && <p role="alert">{historyError} <button type="button" disabled={!joined} onClick={() => setRetry(value => value + 1)}>Retry history</button></p>}
-      {!loading && !historyError && !messages.length && <div className="chat-empty"><span aria-hidden="true">✳</span><p>Every good session starts with a hello.</p><small>Be the first to say something.</small></div>}
+      <header className="panel-heading chat-heading"><h2 id="chat-title">Room chat</h2><button className="chat-close button-quiet" type="button" onClick={onClose} aria-label="Close chat"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15" /></svg></button></header>
+      {loading && joined && <p role="status">Loading messages…</p>}
+      {historyError && <p role="alert">{historyError} <button type="button" disabled={!joined} onClick={() => setRetry(value => value + 1)}>Retry</button></p>}
+
       <div ref={messageList} className="chat-messages" tabIndex={0} onScroll={event => {
         const list = event.currentTarget
         following.current = list.scrollHeight - list.scrollTop - list.clientHeight < 64
         if (following.current) setNewMessages(false)
       }} role="log" aria-label="Room messages" aria-live="polite">
+        {!loading && !historyError && !messages.length && <p className="chat-empty">No messages yet</p>}
+        <div className="chat-transcript">
         {messages.map(message => <article key={message.id} className="chat-message">
+          <span className="chat-avatar" data-tone={Array.from(message.senderName).reduce((value, character) => value + character.codePointAt(0)!, 0) % 3} aria-hidden="true">{Array.from(message.senderName)[0]?.toUpperCase()}</span>
+          <div className="chat-message-body">
           <header><strong>{message.senderName}</strong> <time dateTime={message.createdAt} title={new Date(message.createdAt).toLocaleString()}>
             {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </time></header>
           <p>{message.content}</p>
+          </div>
         </article>)}
+        </div>
       </div>
       {newMessages && <button className="jump-latest button-secondary" type="button" onClick={jumpToLatest}>New messages <span aria-hidden="true">↓</span></button>}
       <form onSubmit={send} className="chat-compose">
         <label className="sr-only" htmlFor="chat-message">Message</label>
-        <textarea ref={composer} id="chat-message" aria-describedby="compose-help" value={draft} onChange={event => setDraft(event.target.value)} maxLength={500}
+        <textarea ref={composer} id="chat-message" autoComplete="off" aria-describedby="compose-help" value={draft} onChange={event => setDraft(event.target.value)} maxLength={500}
           onKeyDown={event => {
             if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) {
               event.preventDefault()
               event.currentTarget.form?.requestSubmit()
             }
-          }} rows={2} required disabled={!joined || sending} placeholder="Say hello, share a little progress…" />
-        <div className="compose-actions"><span id="compose-help">Ctrl / ⌘ + Enter to send</span><button type="submit" disabled={!joined || sending || !draft.trim()}>{sending ? 'Sending…' : 'Send message'} <span aria-hidden="true">↑</span></button></div>
+          }} rows={2} required disabled={!joined || sending} placeholder="Write a message…" />
+        <span className="sr-only" id="compose-help">Ctrl or Command + Enter to send</span>
+        <button className="chat-send" type="submit" aria-label={sending ? 'Sending message' : 'Send message'} title="Send message" disabled={!joined || sending || !draft.trim()}>
+          {sending ? 'Sending…' : 'Send'}
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m3 3 14 7-14 7 3-7-3-7Zm3 7h11" /></svg>
+        </button>
       </form>
       {!joined && <p role="status">Reconnect to send messages</p>}
       {sendError && <p role="alert">{sendError}</p>}

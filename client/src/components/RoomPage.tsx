@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import Chat from './Chat'
+import ChatSidebar from './ChatSidebar'
+import CoveBuddy from './CoveBuddy'
 import RoomActions from './RoomActions'
 import RoomWelcome from './RoomWelcome'
 import { joinRoomSession } from '../socket/room-session'
@@ -33,6 +34,8 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
   const [showRejoinNotice, setShowRejoinNotice] = useState(false)
   const [joinError, setJoinError] = useState('')
   const [attempt, setAttempt] = useState(0)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
   const [members, setMembers] = useState<ConnectedUser[]>([])
   const [enteringRoom, setEnteringRoom] = useState(false)
   const roomTitle = useRef<HTMLHeadingElement>(null)
@@ -172,10 +175,15 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
             <Timer key={`timer:${roomCode}`} roomCode={roomCode} joined={!!joinedName}>
               <StudySeats members={members} ownSocketId={socket.id} joinedName={joinedName} />
             </Timer>
-            <Chat key={`chat:${roomCode}`} roomCode={roomCode} joined={!!joinedName} />
           </div>
 
         </div>
+        <button className="room-buddy" type="button" disabled={!joinedName} onClick={() => setChatOpen(true)} aria-controls="room-chat-sidebar" aria-expanded={chatOpen}
+          aria-label={unreadCount ? `Open chat, ${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}` : 'Open chat'} title="Open chat">
+          <CoveBuddy />
+          {unreadCount > 0 && <span className="buddy-badge" aria-hidden="true">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+        </button>
+        <ChatSidebar roomCode={roomCode} joined={!!joinedName} open={chatOpen && !namePromptOpen} onClose={() => setChatOpen(false)} onUnreadCountChange={setUnreadCount} />
         </div>
         </div>
       </>}
