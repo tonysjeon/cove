@@ -22,7 +22,7 @@ export type SendResult =
 export type Room = { code: string; name: string }
 export type JoinResult =
   | { success: true; room: Room; displayName: string }
-  | { success: false; error: 'INVALID_ROOM_CODE' | 'INVALID_DISPLAY_NAME' | 'ROOM_NOT_FOUND' | 'JOIN_FAILED' }
+  | { success: false; error: 'INVALID_ROOM_CODE' | 'INVALID_DISPLAY_NAME' | 'ROOM_NOT_FOUND' | 'ROOM_CLOSED' | 'JOIN_FAILED' }
 
 export type ConnectedUser = { socketId: string; displayName: string; joinedAt: string }
 export type Presence = { roomCode: string; members: ConnectedUser[] }

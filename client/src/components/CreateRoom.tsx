@@ -47,6 +47,7 @@ export default function CreateRoom() {
       <input id="room-name" aria-invalid={!!error} aria-describedby={error ? 'create-error' : undefined} value={name} onChange={event => setName(event.target.value)}
         maxLength={80} required autoComplete="off" placeholder="e.g. The afternoon club" disabled={pending} />
       <button type="submit" disabled={pending}>{pending ? 'Creating…' : 'Create room'} <span aria-hidden="true">→</span></button>
+      <p className="room-lifetime-note">Rooms close after 24 hours with nobody inside.</p>
       {error && <p id="create-error" role="alert">{error}</p>}
     </form>
   )

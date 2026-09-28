@@ -529,3 +529,5 @@ html { scrollbar-gutter: stable; }
 }
 
 .radio-enable-sound { display: block; margin: 4px auto 0; padding: 6px 10px; min-height: 32px; font-size: .72rem; }
+
+.room-form .room-lifetime-note { margin: 12px 0 0; color: var(--muted); font-size: .75rem; }

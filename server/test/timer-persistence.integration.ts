@@ -42,6 +42,7 @@ test('PostgreSQL timers survive service and connection restarts including expire
   } finally {
     await timers.dispose()
     await getPrisma().room.deleteMany({ where: { code: { in: [running.code, paused.code] } } })
+    await getPrisma().roomCode.deleteMany({ where: { code: { in: [running.code, paused.code] } } })
     await disconnectDatabase()
   }
 })

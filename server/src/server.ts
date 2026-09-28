@@ -2,6 +2,8 @@ import 'dotenv/config'
 import { createServer } from 'node:http'
 import { createRoomServer } from './socket/rooms.js'
 import { createApp } from './app.js'
+import { postgresRoomLifetimeStore } from './services/room-lifetime-store.js'
+import { createRoom } from './services/rooms.js'
 import { postgresTimerStore } from './services/timer-store.js'
 import { disconnectDatabase } from './db/prisma.js'
 
@@ -11,9 +13,9 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 }
 
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
-const app = createApp(clientUrl)
+const app = createApp(clientUrl, createRoom, code => io.roomLifetime!.lookup(code))
 const server = createServer(app)
-const io = createRoomServer(server, clientUrl, undefined, undefined, postgresTimerStore)
+const io = createRoomServer(server, clientUrl, undefined, undefined, postgresTimerStore, postgresRoomLifetimeStore)
 await io.timerReady
 
 server.listen(port, () => {
@@ -22,7 +24,10 @@ server.listen(port, () => {
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, async () => {
-    await io.stopTimers()
-    io.close(() => { void disconnectDatabase() })
+    io.close(() => { void (async () => {
+      await io.roomLifetime?.dispose()
+      await io.stopTimers()
+      await disconnectDatabase()
+    })() })
   })
 }

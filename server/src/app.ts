@@ -1,3 +1,4 @@
+import { RoomClosedError } from './services/room-lifetime.js'
 import cors from 'cors'
 import { getRecentMessages } from './services/messages.js'
 import express, { type ErrorRequestHandler } from 'express'
@@ -34,6 +35,10 @@ export function createApp(clientUrl: string, saveRoom = createRoom, findRoom = g
   })
 
   const handleError: ErrorRequestHandler = (error, _request, response, _next) => {
+    if (error instanceof RoomClosedError) {
+      response.status(410).json({ error: 'ROOM_CLOSED' })
+      return
+    }
     if (error.type === 'entity.parse.failed') {
       response.status(400).json({ error: 'Invalid JSON body' })
       return

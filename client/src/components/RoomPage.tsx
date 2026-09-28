@@ -15,6 +15,7 @@ import type { Room, JoinResult, ConnectedUser, Presence } from '../../../server/
 const errors: Record<Extract<JoinResult, { success: false }>['error'], string> = {
   INVALID_ROOM_CODE: 'Enter a valid six-character room code',
   INVALID_DISPLAY_NAME: 'Enter a display name between 1 and 30 characters',
+  ROOM_CLOSED: 'This room has closed',
   ROOM_NOT_FOUND: 'This room does not exist',
   JOIN_FAILED: 'Unable to join the room — please try again',
 }
@@ -27,6 +28,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
   const [room, setRoom] = useState<Room | null>(null)
   const [connected, setConnected] = useState(socket.connected)
   const [loadError, setLoadError] = useState('')
+  const [closed, setClosed] = useState(false)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [name, setName] = useState(() => savedName(roomCode))
   const [namePromptOpen, setNamePromptOpen] = useState(!name)
@@ -43,7 +45,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
   const [enteringRoom, setEnteringRoom] = useState(false)
   const roomTitle = useRef<HTMLHeadingElement>(null)
   const focusAfterJoin = useRef(false)
-  const awaitingRoom = !!room && !joinedName && !namePromptOpen && !loadError
+  const awaitingRoom = !!room && !joinedName && !namePromptOpen && !closed && !loadError
 
   useEffect(() => {
     setShowRejoinNotice(false)
@@ -88,6 +90,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
         const response = await fetch(`${apiUrl}/api/rooms/${encodeURIComponent(roomCode)}`, {
           signal: controller.signal,
         })
+        if (response.status === 410) { if (active) setClosed(true); return }
         if (response.status === 404) throw new Error('This room does not exist')
         if (response.status === 400) throw new Error('This room code is invalid')
         if (!response.ok) throw new Error('Unable to load the room — please try again')
@@ -116,6 +119,12 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
       },
       result(result) {
         setStatus('')
+        if (!result.success && result.error === 'ROOM_CLOSED') {
+          setClosed(true)
+          setJoinedName('')
+          try { sessionStorage.removeItem(`cove:name:${roomCode}`) } catch { /* Storage is optional. */ }
+          return
+        }
         if (!result.success) { setJoinError(errors[result.error]); setNamePromptOpen(true); return }
         setEnteringRoom(focusAfterJoin.current)
         setJoinedName(result.displayName)
@@ -157,7 +166,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
 
   return (
     <section className="room-page" aria-labelledby="room-title">
-      {loadError ? <div className="room-notice"><h1 id="room-title">Let’s try that again</h1><p role="alert">{loadError}</p><button type="button" onClick={() => setLoadAttempt(value => value + 1)}>Retry room</button></div>
+      {closed ? <div className="room-notice"><h1 id="room-title">This room has closed</h1><p>Rooms close after 24 hours with nobody inside.</p><a href="/">Create a room</a></div> : loadError ? <div className="room-notice"><h1 id="room-title">Let’s try that again</h1><p role="alert">{loadError}</p><button type="button" onClick={() => setLoadAttempt(value => value + 1)}>Retry room</button></div>
         : !room ? <div className="room-notice"><h1 id="room-title">Making room for you…</h1><p role="status">Loading your space</p></div> : <>
         <div className="room-space">
         <div className="room-identity">

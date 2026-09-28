@@ -2,19 +2,25 @@ import type { Server as HttpServer } from 'node:http'
 import { Server } from 'socket.io'
 import { memoryTimerStore, type TimerStore } from '../services/timer-store.js'
 import { createTimers } from '../services/timers.js'
+import { createRoomLifetime, RoomClosedError, type RoomLifetimeStore } from '../services/room-lifetime.js'
 import { createMusic } from '../services/music.js'
 import { musicStations, type MusicCommand, type MusicResult } from '../music/catalog.js'
 import { saveMessage } from '../services/messages.js'
 import { getRoom, normalizeRoomCode } from '../services/rooms.js'
-import type { ClientToServerEvents, ServerToClientEvents, SocketData, ConnectedUser } from '../types/rooms.js'
+import type { ClientToServerEvents, ServerToClientEvents, SocketData, ConnectedUser, Room } from '../types/rooms.js'
 
-export function createRoomServer(server: HttpServer, clientUrl: string, findRoom = getRoom, persistMessage = saveMessage, timerStore: TimerStore = memoryTimerStore()) {
+export function createRoomServer(server: HttpServer, clientUrl: string, findRoom = getRoom, persistMessage = saveMessage, timerStore: TimerStore = memoryTimerStore(), lifetimeStore?: RoomLifetimeStore) {
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(server, {
     cors: { origin: clientUrl },
   })
   const timers = createTimers(update => io.to(update.roomCode).emit('timer:state', update), () => Date.now(), timerStore)
   const music = createMusic(update => io.to(update.roomCode).emit('music:state', update))
-  const timerReady = timers.restore()
+  const roomLifetime = lifetimeStore ? createRoomLifetime(lifetimeStore, {
+    occupied: code => !!io.sockets.adapter.rooms.get(code)?.size,
+    remove: async (code, remove) => { await timers.forget(code, remove); music.forget(code) },
+  }) : undefined
+  const timerReady = (async () => { await roomLifetime?.initialize(); await timers.restore() })()
+  server.once('close', () => { void roomLifetime?.dispose() })
   server.once('close', () => music.dispose())
   server.once('close', () => timers.dispose())
 
@@ -28,6 +34,7 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
     }
     io.to(roomCode).emit('room:presence', { roomCode, members })
     music.presence(roomCode, members.length > 0)
+    void roomLifetime?.presence(roomCode).catch(error => console.error('Room expiry update failed', error))
   }
 
   io.on('connection', socket => {
@@ -45,28 +52,40 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
           acknowledge({ success: false, error: 'INVALID_DISPLAY_NAME' })
           return
         }
-        const room = await findRoom(roomCode)
-        if (!socket.connected) return
-        if (!room) { acknowledge({ success: false, error: 'ROOM_NOT_FOUND' }); return }
         await timerReady
-        const timerState = await timers.snapshot(roomCode)
-        if (!socket.connected) return
-        const previousRoom = socket.data.roomCode
-        if (previousRoom && previousRoom !== roomCode) {
-          await socket.leave(previousRoom)
-          broadcastPresence(previousRoom)
+        const enter = async (room: Room) => {
+          if (!socket.connected) return
+          const timerState = await timers.snapshot(roomCode)
+          if (!socket.connected) return
+          const previousRoom = socket.data.roomCode
+          if (previousRoom && previousRoom !== roomCode) {
+            await socket.leave(previousRoom)
+            broadcastPresence(previousRoom)
+          }
+          await socket.join(roomCode)
+          if (!socket.connected) { await socket.leave(roomCode); return }
+          socket.data.joinedAt = previousRoom === roomCode && socket.data.joinedAt
+            ? socket.data.joinedAt : new Date().toISOString()
+          socket.data.roomCode = roomCode
+          socket.data.displayName = displayName
+          acknowledge({ success: true, room, displayName })
+          broadcastPresence(roomCode)
+          socket.emit('timer:state', timerState)
+          socket.emit('music:state', music.snapshot(roomCode))
         }
-        await socket.join(roomCode)
-        if (!socket.connected) { await socket.leave(roomCode); return }
-        socket.data.joinedAt = previousRoom === roomCode && socket.data.joinedAt
-          ? socket.data.joinedAt : new Date().toISOString()
-        socket.data.roomCode = roomCode
-        socket.data.displayName = displayName
-        acknowledge({ success: true, room, displayName })
-        broadcastPresence(roomCode)
-        socket.emit('timer:state', timerState)
-        socket.emit('music:state', music.snapshot(roomCode))
+        if (roomLifetime) {
+          if (!await roomLifetime.join(roomCode, enter) && socket.connected) acknowledge({ success: false, error: 'ROOM_NOT_FOUND' })
+        } else {
+          const room = await findRoom(roomCode)
+          if (!socket.connected) return
+          if (!room) { acknowledge({ success: false, error: 'ROOM_NOT_FOUND' }); return }
+          await enter(room)
+        }
       }).catch(error => {
+        if (error instanceof RoomClosedError) {
+          if (socket.connected) acknowledge({ success: false, error: 'ROOM_CLOSED' })
+          return
+        }
         console.error('Room join failed', error)
         if (socket.connected) acknowledge({ success: false, error: 'JOIN_FAILED' })
       })
@@ -157,5 +176,5 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
       console.log(`socket disconnected: ${socket.id} (${reason})`)
     })
   })
-  return Object.assign(io, { timerReady, stopTimers: timers.dispose })
+  return Object.assign(io, { timerReady, stopTimers: timers.dispose, roomLifetime })
 }

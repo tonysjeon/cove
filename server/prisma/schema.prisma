@@ -13,8 +13,18 @@ model Room {
   code      String   @unique
   name      String
   createdAt DateTime @default(now())
+  expiresAt DateTime? @default(dbgenerated("((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + '24 hours'::interval)"))
+  reservedCode RoomCode @relation(fields: [code], references: [code])
   messages  Message[]
   timer     TimerState?
+
+  @@index([expiresAt])
+}
+
+// Keep only the code after deletion so old invites cannot be reused.
+model RoomCode {
+  code String @id
+  room Room?
 }
 
 model Message {
