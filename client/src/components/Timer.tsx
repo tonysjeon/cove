@@ -5,7 +5,7 @@ import type { TimerAction, TimerUpdate } from '../../../server/src/types/rooms'
 
 type ReceivedTimer = { update: TimerUpdate; receivedAt: number }
 
-export default function Timer({ roomCode, joined, children }: { roomCode: string; joined: boolean; children?: ReactNode }) {
+export default function Timer({ roomCode, joined, children, stereo }: { roomCode: string; joined: boolean; children?: ReactNode; stereo?: ReactNode }) {
   const progressGradient = useId()
   const [received, setReceived] = useState<ReceivedTimer | null>(null)
   const [now, setNow] = useState(() => performance.now())
@@ -118,6 +118,7 @@ export default function Timer({ roomCode, joined, children }: { roomCode: string
       </div>
       {error && <p role="alert">{error}</p>}
       </div>
+      {stereo}
       </div>
       {children}
     </section>

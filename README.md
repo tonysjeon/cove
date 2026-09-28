@@ -179,3 +179,13 @@ The home page has a compact welcome and open forms separated by thin dividers. L
 Chat scrolls within its own message list. Reading older messages pauses automatic scrolling and exposes **New messages** when updates arrive. **Ctrl + Enter** or **⌘ + Enter** sends a message; Enter inserts a new line. Focus returns to the composer after sending. Forms have associated labels and error descriptions, controls have visible keyboard focus, and the page has a skip-to-content link.
 
 Verify desktop and narrow mobile layouts, keyboard navigation, invite copying, empty states, invalid codes, and two-tab timer and chat updates. Check that loading history does not move the entire page, and new messages do not interrupt reading older chat.
+
+## Shared room radio
+
+Click the illustrated radio to choose Café, Rainy day, or Slow afternoon. Any joined member can change the station, play, pause, or skip for the room. Play and Pause control music for everyone, and each person has an independent volume control (zero mutes only their device). Playback starts automatically for joined members; if a browser blocks it, an **Enable sound** prompt lets that person allow audio without changing the room playback state.
+
+Six lo-fi tracks by TAD are served directly from `client/public/music`, without advertising, third-party players, or music accounts. The source collection is published under CC0; original download links and licensing provenance are recorded in `client/public/music/CREDITS.md`. Keep these assets in the deployed client build.
+
+The server shares a station, playback offset, and start timestamp. Clients resolve the looping playlist locally, check drift every second, and refresh server time every 15 seconds and on returning to the page. Late joins and reconnects seek to the room's current position; synchronization is approximate, not sample-accurate. Music is independent of the Pomodoro timer. Radio state is held in one backend process and resets after a server restart or after the room has been empty for 60 seconds.
+
+Verify in two tabs: join the same room, open each radio and play or switch stations from either. Allow sound if a browser prompts. Check that pause and next track update both tabs, while volume and muting affect only their own tab. Automated tests cover playlist boundaries, pause/resume, room isolation, membership validation, late joins, and empty-room cleanup.

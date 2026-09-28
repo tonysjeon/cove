@@ -6,6 +6,8 @@ import RoomWelcome from './RoomWelcome'
 import { joinRoomSession } from '../socket/room-session'
 import Timer from './Timer'
 import StudySeats from './StudySeats'
+import RoomStereo from './RoomStereo'
+import { useRoomMusic } from '../music/useRoomMusic'
 import { apiUrl } from '../config'
 import { socket } from '../socket/socket'
 import type { Room, JoinResult, ConnectedUser, Presence } from '../../../server/src/types/rooms'
@@ -30,6 +32,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
   const [namePromptOpen, setNamePromptOpen] = useState(!name)
   const [requestedName, setRequestedName] = useState('')
   const [joinedName, setJoinedName] = useState('')
+  const music = useRoomMusic(roomCode, !!joinedName)
   const [status, setStatus] = useState('')
   const [showRejoinNotice, setShowRejoinNotice] = useState(false)
   const [joinError, setJoinError] = useState('')
@@ -172,7 +175,7 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
         }}>
           <div className="room-main">
             {awaitingRoom && showRejoinNotice && <p className="room-rejoining" role="status">{!connected ? 'Reconnecting to your room…' : status || 'Joining your room…'}</p>}
-            <Timer key={`timer:${roomCode}`} roomCode={roomCode} joined={!!joinedName}>
+            <Timer key={`timer:${roomCode}`} roomCode={roomCode} joined={!!joinedName} stereo={<RoomStereo music={music} />}>
               <StudySeats members={members} ownSocketId={socket.id} joinedName={joinedName} />
             </Timer>
           </div>

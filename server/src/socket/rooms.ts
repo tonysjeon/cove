@@ -2,6 +2,8 @@ import type { Server as HttpServer } from 'node:http'
 import { Server } from 'socket.io'
 import { memoryTimerStore, type TimerStore } from '../services/timer-store.js'
 import { createTimers } from '../services/timers.js'
+import { createMusic } from '../services/music.js'
+import { musicStations, type MusicCommand, type MusicResult } from '../music/catalog.js'
 import { saveMessage } from '../services/messages.js'
 import { getRoom, normalizeRoomCode } from '../services/rooms.js'
 import type { ClientToServerEvents, ServerToClientEvents, SocketData, ConnectedUser } from '../types/rooms.js'
@@ -11,7 +13,9 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
     cors: { origin: clientUrl },
   })
   const timers = createTimers(update => io.to(update.roomCode).emit('timer:state', update), () => Date.now(), timerStore)
+  const music = createMusic(update => io.to(update.roomCode).emit('music:state', update))
   const timerReady = timers.restore()
+  server.once('close', () => music.dispose())
   server.once('close', () => timers.dispose())
 
   function broadcastPresence(roomCode: string) {
@@ -23,6 +27,7 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
       }
     }
     io.to(roomCode).emit('room:presence', { roomCode, members })
+    music.presence(roomCode, members.length > 0)
   }
 
   io.on('connection', socket => {
@@ -60,6 +65,7 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
         acknowledge({ success: true, room, displayName })
         broadcastPresence(roomCode)
         socket.emit('timer:state', timerState)
+        socket.emit('music:state', music.snapshot(roomCode))
       }).catch(error => {
         console.error('Room join failed', error)
         if (socket.connected) acknowledge({ success: false, error: 'JOIN_FAILED' })
@@ -80,6 +86,28 @@ export function createRoomServer(server: HttpServer, clientUrl: string, findRoom
         }).catch(error => {
           console.error('Timer action failed', error)
           if (socket.connected) acknowledge({ success: false, error: 'TIMER_FAILED' })
+        })
+      })
+    }
+    for (const event of ['music:command', 'music:sync'] as const) {
+      socket.on(event, (input: { roomCode: string; command?: MusicCommand }, acknowledge: (result: MusicResult) => void) => {
+        if (typeof acknowledge !== 'function') return
+        pending = pending.then(() => {
+          if (!socket.connected) return
+          const roomCode = normalizeRoomCode(input?.roomCode)
+          if (!roomCode || socket.data.roomCode !== roomCode || !socket.rooms.has(roomCode)) {
+            acknowledge({ success: false, error: 'NOT_IN_ROOM' }); return
+          }
+          if (event === 'music:sync') { acknowledge({ success: true, state: music.snapshot(roomCode) }); return }
+          const command = input && 'command' in input ? input.command : null
+          if (!command || !['play', 'pause', 'previous', 'next', 'station'].includes(command.action)
+            || (command.action === 'station' && !musicStations.some(station => station.id === command.stationId))) {
+            acknowledge({ success: false, error: 'INVALID_MUSIC_COMMAND' }); return
+          }
+          acknowledge({ success: true, state: music.act(roomCode, command) })
+        }).catch(error => {
+          console.error('Music update failed', error)
+          if (socket.connected) acknowledge({ success: false, error: 'MUSIC_FAILED' })
         })
       })
     }

@@ -29,6 +29,8 @@ export type Presence = { roomCode: string; members: ConnectedUser[] }
 export type LeaveResult = { success: true } | { success: false; error: 'LEAVE_FAILED' }
 
 export interface ClientToServerEvents {
+  'music:command': (input: { roomCode: string; command: MusicCommand }, acknowledge: (result: MusicResult) => void) => void
+  'music:sync': (input: { roomCode: string }, acknowledge: (result: MusicResult) => void) => void
   'timer:start': TimerCommand
   'timer:pause': TimerCommand
   'timer:reset': TimerCommand
@@ -38,8 +40,10 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
+  'music:state': (update: MusicUpdate) => void
   'timer:state': (update: TimerUpdate) => void
   'chat:newMessage': (update: ChatUpdate) => void
   'room:presence': (presence: Presence) => void
 }
 export interface SocketData { roomCode?: string; displayName?: string; joinedAt?: string }
+import type { MusicCommand, MusicResult, MusicUpdate } from '../music/catalog.js'
