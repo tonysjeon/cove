@@ -42,11 +42,11 @@ export default function CreateRoom() {
 
   return (
     <form onSubmit={handleSubmit} className="room-form" aria-labelledby="create-title">
-      <div className="form-heading"><h2 id="create-title">Make a little space</h2><p>Start a room and invite your favorite people.</p></div>
+      <div className="form-heading"><h2 id="create-title">Start a room</h2><p>Pick a name and invite your friends.</p></div>
       <label htmlFor="room-name">Room name</label>
       <input id="room-name" aria-invalid={!!error} aria-describedby={error ? 'create-error' : undefined} value={name} onChange={event => setName(event.target.value)}
-        maxLength={80} required placeholder="e.g. The afternoon club" disabled={pending} />
-      <button type="submit" disabled={pending}>{pending ? 'Creating…' : 'Create room'}</button>
+        maxLength={80} required autoComplete="off" placeholder="e.g. The afternoon club" disabled={pending} />
+      <button type="submit" disabled={pending}>{pending ? 'Creating…' : 'Create room'} <span aria-hidden="true">→</span></button>
       {error && <p id="create-error" role="alert">{error}</p>}
     </form>
   )

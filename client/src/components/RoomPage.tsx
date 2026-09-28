@@ -1,8 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Chat from './Chat'
-import InviteRoom from './InviteRoom'
+import RoomActions from './RoomActions'
+import RoomWelcome from './RoomWelcome'
 import { joinRoomSession } from '../socket/room-session'
 import Timer from './Timer'
+import StudySeats from './StudySeats'
 import { apiUrl } from '../config'
 import { socket } from '../socket/socket'
 import type { Room, JoinResult, ConnectedUser, Presence } from '../../../server/src/types/rooms'
@@ -20,24 +22,50 @@ function savedName(roomCode: string) {
 
 export default function RoomPage({ roomCode }: { roomCode: string }) {
   const [room, setRoom] = useState<Room | null>(null)
+  const [connected, setConnected] = useState(socket.connected)
   const [loadError, setLoadError] = useState('')
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [name, setName] = useState(() => savedName(roomCode))
+  const [namePromptOpen, setNamePromptOpen] = useState(!name)
   const [requestedName, setRequestedName] = useState('')
   const [joinedName, setJoinedName] = useState('')
   const [status, setStatus] = useState('')
+  const [showRejoinNotice, setShowRejoinNotice] = useState(false)
   const [joinError, setJoinError] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [members, setMembers] = useState<ConnectedUser[]>([])
+  const [enteringRoom, setEnteringRoom] = useState(false)
+  const roomTitle = useRef<HTMLHeadingElement>(null)
+  const focusAfterJoin = useRef(false)
+  const awaitingRoom = !!room && !joinedName && !namePromptOpen && !loadError
+
+  useEffect(() => {
+    setShowRejoinNotice(false)
+    if (!awaitingRoom) return
+    // Keep brief reconnects quiet without delaying membership recovery or disabling controls.
+    const timeout = window.setTimeout(() => setShowRejoinNotice(true), 2000)
+    return () => window.clearTimeout(timeout)
+  }, [awaitingRoom, roomCode])
+
+  useEffect(() => {
+    if (joinedName && focusAfterJoin.current) {
+      roomTitle.current?.focus()
+      focusAfterJoin.current = false
+    }
+  }, [joinedName])
 
   useEffect(() => {
     function presence(update: Presence) {
       if (update.roomCode === roomCode) setMembers(update.members)
     }
-    const clear = () => setMembers([])
+    const clear = () => { setMembers([]); setConnected(false) }
+    const connect = () => setConnected(true)
+    setConnected(socket.connected)
+    socket.on('connect', connect)
     socket.on('room:presence', presence)
     socket.on('disconnect', clear)
     return () => {
+      socket.off('connect', connect)
       socket.off('room:presence', presence)
       socket.off('disconnect', clear)
     }
@@ -82,8 +110,10 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
       },
       result(result) {
         setStatus('')
-        if (!result.success) { setJoinError(errors[result.error]); return }
+        if (!result.success) { setJoinError(errors[result.error]); setNamePromptOpen(true); return }
+        setEnteringRoom(focusAfterJoin.current)
         setJoinedName(result.displayName)
+        setNamePromptOpen(false)
         try { sessionStorage.setItem(`cove:name:${roomCode}`, result.displayName) } catch { /* Storage is optional. */ }
       },
     })
@@ -91,11 +121,15 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!socket.connected || status) return
     const displayName = name.trim()
     if (!displayName || displayName.length > 30) {
       setJoinError(errors.INVALID_DISPLAY_NAME)
       return
     }
+    focusAfterJoin.current = true
+    setJoinError('')
+    setStatus('Joining room…')
     setRequestedName(displayName)
     setAttempt(value => value + 1)
   }
@@ -113,45 +147,36 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
     })
   }
 
+  const showWelcome = !!room && !loadError && namePromptOpen && !joinedName
+
   return (
     <section className="room-page" aria-labelledby="room-title">
-      <a className="back-link" href="/"><span aria-hidden="true">←</span> Home</a>
       {loadError ? <div className="room-notice"><h1 id="room-title">Let’s try that again</h1><p role="alert">{loadError}</p><button type="button" onClick={() => setLoadAttempt(value => value + 1)}>Retry room</button></div>
         : !room ? <div className="room-notice"><h1 id="room-title">Making room for you…</h1><p role="status">Loading your space</p></div> : <>
-        <header className="room-header">
-          <div><p className="eyebrow">Your shared space</p><h1 id="room-title">{room.name}</h1><p>A little company makes a difference.</p></div>
-          <InviteRoom key={room.code} roomCode={room.code} />
-        </header>
-        <div className="room-layout">
+        <div className="room-space">
+        <div className="room-identity">
+          <h1 ref={roomTitle} id="room-title" tabIndex={-1}>{room.name}</h1>
+          <div className="room-identity-actions">
+            <RoomActions key={room.code} roomCode={room.code} joined={!!joinedName} showOptions={!showWelcome} onLeave={leave} />
+          </div>
+
+        </div>
+        {showWelcome && <RoomWelcome name={name} onNameChange={setName} onSubmit={submit}
+          status={status} error={joinError} connected={connected} />}
+        <div className="room-screen" hidden={showWelcome}>
+        <div className={`room-layout${enteringRoom ? ' is-entering' : ''}`} onAnimationEnd={event => {
+          if (event.target === event.currentTarget) setEnteringRoom(false)
+        }}>
           <div className="room-main">
-            {!joinedName && <section className="welcome-panel">
-              <span className="section-mark" aria-hidden="true">☀</span>
-              <h2>{requestedName && !joinError ? 'Saving your seat' : 'Come on in'}</h2>
-              <p>{requestedName && !joinError ? 'We’ll bring you back into the room as soon as we can.' : 'What should your friends call you?'}</p>
-              <form onSubmit={submit} className="room-form">
-                <label htmlFor="display-name">Display name</label>
-                <input id="display-name" aria-invalid={!!joinError} aria-describedby={joinError ? 'name-error' : undefined} value={name} onChange={event => setName(event.target.value)} maxLength={30} required autoComplete="nickname" placeholder="Your name" />
-                <button type="submit" disabled={!socket.connected || !!status}>Join room</button>
-              </form>
-              {status && <p className="inline-status" role="status">{status}</p>}
-              {joinError && <p id="name-error" role="alert">{joinError}</p>}
-            </section>}
-            <Timer key={`timer:${roomCode}`} roomCode={roomCode} joined={!!joinedName} />
+            {awaitingRoom && showRejoinNotice && <p className="room-rejoining" role="status">{!connected ? 'Reconnecting to your room…' : status || 'Joining your room…'}</p>}
+            <Timer key={`timer:${roomCode}`} roomCode={roomCode} joined={!!joinedName}>
+              <StudySeats members={members} ownSocketId={socket.id} joinedName={joinedName} />
+            </Timer>
             <Chat key={`chat:${roomCode}`} roomCode={roomCode} joined={!!joinedName} />
           </div>
-          <aside className="members" aria-label="Online members">
-            <header className="panel-heading"><h2>In good company</h2><span className="member-count" aria-live="polite" aria-label={joinedName ? `${members.length} online` : 'Join to see online friends'}>{joinedName ? members.length : '—'}</span></header>
-            {joinedName ? <>
-              <p className="panel-description">Here with you right now</p>
-              <ul>{members.map(member => <li key={member.socketId}>
-                <span className="avatar" aria-hidden="true">{Array.from(member.displayName)[0].toUpperCase()}<span className="online-dot" /></span>
-                <span className="member-name">{member.displayName}{member.socketId === socket.id && <small>you</small>}</span>
-              </li>)}</ul>
-              {members.length === 1 && <p className="quiet-note">The first one here. Invite a friend to join you.</p>}
-              <div className="membership-actions"><p className="sr-only" role="status">Joined as {joinedName}</p><button className="button-quiet" type="button" onClick={leave}>Leave room <span aria-hidden="true">↗</span></button></div>
-            </> : <p className="quiet-note">{requestedName ? 'Reconnecting with your room…' : 'Join the room to see who’s here.'}</p>}
-            <div className="room-note"><span aria-hidden="true">✳</span><p>You don’t have to do it all.<br />Just a little, together.</p></div>
-          </aside>
+
+        </div>
+        </div>
         </div>
       </>}
     </section>
