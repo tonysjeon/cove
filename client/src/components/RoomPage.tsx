@@ -1,7 +1,13 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import Chat from './Chat'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import ChatSidebar from './ChatSidebar'
+import CoveBuddy from './CoveBuddy'
+import RoomActions from './RoomActions'
+import RoomWelcome from './RoomWelcome'
 import { joinRoomSession } from '../socket/room-session'
 import Timer from './Timer'
+import StudySeats from './StudySeats'
+import RoomStereo from './RoomStereo'
+import { useRoomMusic } from '../music/useRoomMusic'
 import { apiUrl } from '../config'
 import { socket } from '../socket/socket'
 import type { Room, JoinResult, ConnectedUser, Presence } from '../../../server/src/types/rooms'
@@ -9,6 +15,7 @@ import type { Room, JoinResult, ConnectedUser, Presence } from '../../../server/
 const errors: Record<Extract<JoinResult, { success: false }>['error'], string> = {
   INVALID_ROOM_CODE: 'Enter a valid six-character room code',
   INVALID_DISPLAY_NAME: 'Enter a display name between 1 and 30 characters',
+  ROOM_CLOSED: 'This room has closed',
   ROOM_NOT_FOUND: 'This room does not exist',
   JOIN_FAILED: 'Unable to join the room — please try again',
 }
@@ -19,24 +26,54 @@ function savedName(roomCode: string) {
 
 export default function RoomPage({ roomCode }: { roomCode: string }) {
   const [room, setRoom] = useState<Room | null>(null)
+  const [connected, setConnected] = useState(socket.connected)
   const [loadError, setLoadError] = useState('')
+  const [closed, setClosed] = useState(false)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [name, setName] = useState(() => savedName(roomCode))
+  const [namePromptOpen, setNamePromptOpen] = useState(!name)
   const [requestedName, setRequestedName] = useState('')
   const [joinedName, setJoinedName] = useState('')
+  const music = useRoomMusic(roomCode, !!joinedName)
   const [status, setStatus] = useState('')
+  const [showRejoinNotice, setShowRejoinNotice] = useState(false)
   const [joinError, setJoinError] = useState('')
   const [attempt, setAttempt] = useState(0)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
   const [members, setMembers] = useState<ConnectedUser[]>([])
+  const [enteringRoom, setEnteringRoom] = useState(false)
+  const roomTitle = useRef<HTMLHeadingElement>(null)
+  const focusAfterJoin = useRef(false)
+  const awaitingRoom = !!room && !joinedName && !namePromptOpen && !closed && !loadError
+
+  useEffect(() => {
+    setShowRejoinNotice(false)
+    if (!awaitingRoom) return
+    // Keep brief reconnects quiet without delaying membership recovery or disabling controls.
+    const timeout = window.setTimeout(() => setShowRejoinNotice(true), 2000)
+    return () => window.clearTimeout(timeout)
+  }, [awaitingRoom, roomCode])
+
+  useEffect(() => {
+    if (joinedName && focusAfterJoin.current) {
+      roomTitle.current?.focus()
+      focusAfterJoin.current = false
+    }
+  }, [joinedName])
 
   useEffect(() => {
     function presence(update: Presence) {
       if (update.roomCode === roomCode) setMembers(update.members)
     }
-    const clear = () => setMembers([])
+    const clear = () => { setMembers([]); setConnected(false) }
+    const connect = () => setConnected(true)
+    setConnected(socket.connected)
+    socket.on('connect', connect)
     socket.on('room:presence', presence)
     socket.on('disconnect', clear)
     return () => {
+      socket.off('connect', connect)
       socket.off('room:presence', presence)
       socket.off('disconnect', clear)
     }
@@ -53,13 +90,14 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
         const response = await fetch(`${apiUrl}/api/rooms/${encodeURIComponent(roomCode)}`, {
           signal: controller.signal,
         })
+        if (response.status === 410) { if (active) setClosed(true); return }
         if (response.status === 404) throw new Error('This room does not exist')
         if (response.status === 400) throw new Error('This room code is invalid')
         if (!response.ok) throw new Error('Unable to load the room — please try again')
         const data = await response.json() as Room
         if (active) { loaded = true; setRoom(data); setRequestedName(savedName(roomCode)) }
       } catch (error) {
-        if (active) setLoadError(controller.signal.aborted ? 'Loading timed out — please try again' : error instanceof Error ? error.message : 'Unable to load the room')
+        if (active) setLoadError(controller.signal.aborted ? 'Loading timed out — please try again' : error instanceof TypeError ? 'We couldn’t reach your room — please try again' : error instanceof Error ? error.message : 'Unable to load the room')
       } finally {
         clearTimeout(timeout)
       }
@@ -81,8 +119,16 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
       },
       result(result) {
         setStatus('')
-        if (!result.success) { setJoinError(errors[result.error]); return }
+        if (!result.success && result.error === 'ROOM_CLOSED') {
+          setClosed(true)
+          setJoinedName('')
+          try { sessionStorage.removeItem(`cove:name:${roomCode}`) } catch { /* Storage is optional. */ }
+          return
+        }
+        if (!result.success) { setJoinError(errors[result.error]); setNamePromptOpen(true); return }
+        setEnteringRoom(focusAfterJoin.current)
         setJoinedName(result.displayName)
+        setNamePromptOpen(false)
         try { sessionStorage.setItem(`cove:name:${roomCode}`, result.displayName) } catch { /* Storage is optional. */ }
       },
     })
@@ -90,11 +136,15 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!socket.connected || status) return
     const displayName = name.trim()
     if (!displayName || displayName.length > 30) {
       setJoinError(errors.INVALID_DISPLAY_NAME)
       return
     }
+    focusAfterJoin.current = true
+    setJoinError('')
+    setStatus('Joining room…')
     setRequestedName(displayName)
     setAttempt(value => value + 1)
   }
@@ -112,32 +162,43 @@ export default function RoomPage({ roomCode }: { roomCode: string }) {
     })
   }
 
+  const showWelcome = !!room && !loadError && namePromptOpen && !joinedName
+
   return (
-    <section>
-      {loadError ? <p role="alert">{loadError} <button type="button" onClick={() => setLoadAttempt(value => value + 1)}>Retry room</button></p> : !room ? <p role="status">Loading room…</p> : <>
-        <h2>{room.name}</h2>
-        <p>Room {room.code}</p>
-        <Timer key={`timer:${roomCode}`} roomCode={roomCode} joined={!!joinedName} />
-        {joinedName ? <>
-          <p role="status">Joined as {joinedName}</p>
-          <aside className="members" aria-label="Online members">
-            <h3 aria-live="polite">{members.length} online</h3>
-            <ul>{members.map(member => <li key={member.socketId}>
-              <span aria-hidden="true" className="online-dot" />
-              {member.displayName}{member.socketId === socket.id && ' (you)'}
-            </li>)}</ul>
-          </aside>
-          <button type="button" onClick={leave}>Leave room</button>
-        </> : <form onSubmit={submit} className="create-room">
-          <label htmlFor="display-name">Display name</label>
-          <input id="display-name" value={name} onChange={event => setName(event.target.value)} maxLength={30} required />
-          <button type="submit" disabled={!socket.connected || !!status}>Join room</button>
-        </form>}
-        <Chat key={`chat:${roomCode}`} roomCode={roomCode} joined={!!joinedName} />
-        {status && <p role="status">{status}</p>}
-        {joinError && <p role="alert">{joinError}</p>}
+    <section className="room-page" aria-labelledby="room-title">
+      {closed ? <div className="room-notice"><h1 id="room-title">This room has closed</h1><p>Rooms close after 24 hours with nobody inside.</p><a href="/">Create a room</a></div> : loadError ? <div className="room-notice"><h1 id="room-title">Let’s try that again</h1><p role="alert">{loadError}</p><button type="button" onClick={() => setLoadAttempt(value => value + 1)}>Retry room</button></div>
+        : !room ? <div className="room-notice"><h1 id="room-title">Making room for you…</h1><p role="status">Loading your space</p></div> : <>
+        <div className="room-space">
+        <div className="room-identity">
+          <h1 ref={roomTitle} id="room-title" tabIndex={-1}>{room.name}</h1>
+          <div className="room-identity-actions">
+            <RoomActions key={room.code} roomCode={room.code} joined={!!joinedName} showOptions={!showWelcome} onLeave={leave} />
+          </div>
+
+        </div>
+        {showWelcome && <RoomWelcome name={name} onNameChange={setName} onSubmit={submit}
+          status={status} error={joinError} connected={connected} />}
+        <div className="room-screen" hidden={showWelcome}>
+        <div className={`room-layout${enteringRoom ? ' is-entering' : ''}`} onAnimationEnd={event => {
+          if (event.target === event.currentTarget) setEnteringRoom(false)
+        }}>
+          <div className="room-main">
+            {awaitingRoom && showRejoinNotice && <p className="room-rejoining" role="status">{!connected ? 'Reconnecting to your room…' : status || 'Joining your room…'}</p>}
+            <Timer key={`timer:${roomCode}`} roomCode={roomCode} joined={!!joinedName} stereo={<RoomStereo music={music} />}>
+              <StudySeats members={members} ownSocketId={socket.id} joinedName={joinedName} />
+            </Timer>
+          </div>
+
+        </div>
+        <button className="room-buddy" type="button" disabled={!joinedName} onClick={() => setChatOpen(true)} aria-controls="room-chat-sidebar" aria-expanded={chatOpen}
+          aria-label={unreadCount ? `Open chat, ${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}` : 'Open chat'} title="Open chat">
+          <CoveBuddy />
+          {unreadCount > 0 && <span className="buddy-badge" aria-hidden="true">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+        </button>
+        <ChatSidebar roomCode={roomCode} joined={!!joinedName} open={chatOpen && !namePromptOpen} onClose={() => setChatOpen(false)} onUnreadCountChange={setUnreadCount} />
+        </div>
+        </div>
       </>}
-      <p><a href="/">Back to home</a></p>
     </section>
   )
 }

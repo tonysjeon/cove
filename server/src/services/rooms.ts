@@ -1,3 +1,4 @@
+import { RoomClosedError } from './room-lifetime.js'
 import { randomInt } from 'node:crypto'
 import { getPrisma } from '../db/prisma.js'
 import { Prisma } from '../generated/prisma/client.js'
@@ -13,7 +14,7 @@ export async function createRoom(name: string) {
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
       return await prisma.room.create({
-        data: { name, code: generateRoomCode() },
+        data: { name, reservedCode: { create: { code: generateRoomCode() } } },
         select: { code: true, name: true },
       })
     } catch (error) {
@@ -32,5 +33,8 @@ export function normalizeRoomCode(value: unknown): string | null {
 }
 
 export async function getRoom(code: string) {
-  return getPrisma().room.findUnique({ where: { code }, select: { code: true, name: true } })
+  const room = await getPrisma().room.findUnique({ where: { code }, select: { code: true, name: true, expiresAt: true } })
+  if (room?.expiresAt && room.expiresAt.getTime() <= Date.now()) throw new RoomClosedError()
+  if (!room && await getPrisma().roomCode.findUnique({ where: { code } })) throw new RoomClosedError()
+  return room ? { code: room.code, name: room.name } : null
 }

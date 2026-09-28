@@ -1,78 +1,46 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
-import { apiUrl } from './config'
 import { socket } from './socket/socket'
 import CreateRoom from './components/CreateRoom'
 import JoinRoom from './components/JoinRoom'
 import RoomPage from './components/RoomPage'
+import CoveBuddy from './components/CoveBuddy'
 
 export default function App() {
-  const [connection, setConnection] = useState(socket.connected ? 'Connected' : 'Connecting…')
-
   useEffect(() => {
-    const onConnect = () => setConnection('Connected')
-    const onDisconnect = () => setConnection('Disconnected — reconnecting…')
-    const onConnectError = () => setConnection('Unable to connect — retrying…')
-
-    socket.on('connect', onConnect)
-    socket.on('disconnect', onDisconnect)
-    socket.on('connect_error', onConnectError)
     socket.connect()
-
-    return () => {
-      socket.off('connect', onConnect)
-      socket.off('disconnect', onDisconnect)
-      socket.off('connect_error', onConnectError)
-      socket.disconnect()
-    }
+    return () => { socket.disconnect() }
   }, [])
-
-  const [status, setStatus] = useState('Checking connection…')
-
-  useEffect(() => {
-    if (connection !== 'Connected') {
-      setStatus('Waiting for the backend…')
-      return
-    }
-    setStatus('Checking connection…')
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), 5000)
-    let active = true
-
-    async function checkHealth() {
-      try {
-        const response = await fetch(`${apiUrl}/api/health`, { signal: controller.signal })
-        if (!response.ok) throw new Error('Health check failed')
-        const data: unknown = await response.json()
-        if (!data || typeof data !== 'object' || !('status' in data) || data.status !== 'ok') {
-          throw new Error('Unexpected health response')
-        }
-        if (active) setStatus('Backend connected')
-      } catch {
-        if (active) setStatus('Backend health check failed')
-      } finally {
-        window.clearTimeout(timeout)
-      }
-    }
-
-    void checkHealth()
-    return () => {
-      active = false
-      window.clearTimeout(timeout)
-      controller.abort()
-    }
-  }, [connection])
 
   const roomCode = window.location.pathname.match(/^\/room\/([^/]+)\/?$/)?.[1]
 
   return (
-    <main>
-      <p className="eyebrow">A shared space to focus</p>
-      <h1>cove</h1>
-      <p>Settle in and make time for what matters.</p>
-      {roomCode ? <RoomPage roomCode={roomCode.toUpperCase()} /> : <><CreateRoom /><JoinRoom /></>}
-      <p className="status" role="status">API health: {status}</p>
-      <p className="status" role="status">Live connection: {connection}</p>
-    </main>
+    <div className={`app-shell ${roomCode ? 'study-shell' : 'home-shell'}`}>
+      <a className="skip-link" href="#main-content">Skip to content</a>
+      <header className="site-header">
+        <a className="brand" href="/" aria-label="cove home">
+          cove
+        </a>
+      </header>
+      <main id="main-content" tabIndex={-1}>
+        {roomCode ? <RoomPage roomCode={roomCode.toUpperCase()} /> : <div className="home-layout">
+          <section className="home-intro" aria-labelledby="welcome-title">
+            <div className="intro-text">
+              <h1 id="welcome-title">Make yourself at home.</h1>
+              <p className="intro-copy">A little space to focus, catch up, and get things done together.</p>
+            </div>
+            <div className="buddy-note" aria-hidden="true">
+              <div className="buddy-portrait"><CoveBuddy className="hero-buddy" /></div>
+            </div>
+          </section>
+          <section className="entry-panel" aria-label="Create or find a room">
+            <div className="entry-option"><CreateRoom /></div>
+            <div className="entry-option"><JoinRoom /></div>
+          </section>
+          <p className="home-note">No accounts. Just you and your people.</p>
+        </div>}
+      </main>
+      {roomCode && <footer className="site-footer">A little focus, in good company.</footer>}
+    </div>
   )
 }

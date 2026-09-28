@@ -91,6 +91,11 @@ export function createTimers(broadcast: (update: TimerUpdate) => void, now = () 
   }
   return {
     snapshot, act,
+    forget: (code: string, remove: () => Promise<void>) => serialize(code, async () => {
+      await remove()
+      cancel(code)
+      states.delete(code)
+    }),
     restore: async () => { for (const code of await store.runningRooms()) await snapshot(code) },
     dispose: async () => {
       closed = true

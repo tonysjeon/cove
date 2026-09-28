@@ -17,6 +17,7 @@ process.env.DATABASE_URL = process.env.TEST_DATABASE_URL
 test('socket messages persist and history returns only the latest 50 messages in room order', async () => {
   const room = await createRoom('Chat integration')
   const otherRoom = await createRoom('Isolated chat integration')
+  const codes = [room.code, otherRoom.code]
   const server = createServer(createApp('http://localhost:5173'))
   const io = createRoomServer(server, 'http://localhost:5173')
   server.listen(0, '127.0.0.1'); await once(server, 'listening')
@@ -48,12 +49,14 @@ test('socket messages persist and history returns only the latest 50 messages in
     assert.deepEqual(separate.map(message => message.content), ['Other room only'])
     assert.equal((await fetch(`${url}/api/rooms/bad/messages`)).status, 400)
     const missing = await createRoom('Missing chat room')
+    codes.push(missing.code)
     await getPrisma().room.delete({ where: { code: missing.code } })
-    assert.equal((await fetch(`${url}/api/rooms/${missing.code}/messages`)).status, 404)
+    assert.equal((await fetch(`${url}/api/rooms/${missing.code}/messages`)).status, 410)
   } finally {
     client.disconnect()
     await new Promise<void>(resolve => io.close(() => resolve()))
-    await getPrisma().room.deleteMany({ where: { code: { in: [room.code, otherRoom.code] } } })
+    await getPrisma().room.deleteMany({ where: { code: { in: codes } } })
+    await getPrisma().roomCode.deleteMany({ where: { code: { in: codes } } })
     await disconnectDatabase()
   }
 })

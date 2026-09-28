@@ -35,6 +35,7 @@ test('concurrent room creation persists distinct codes across database connectio
     assert.ok(rooms.every(room => room.name.startsWith('Integration room ')))
   } finally {
     await getPrisma().room.deleteMany({ where: { code: { in: codes } } })
+    await getPrisma().roomCode.deleteMany({ where: { code: { in: codes } } })
     await disconnectDatabase()
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
   }

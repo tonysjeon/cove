@@ -19,7 +19,7 @@ npm run db:deploy -w server
 npm run dev
 ```
 
-Open http://localhost:5173 to see the frontend and backend connection status.
+Open http://localhost:5173 to create or find a room. The header only shows a connection notice while connecting or reconnecting.
 The server runs at http://localhost:3001.
 
 To run each service separately, use `npm run dev -w client` and `npm run dev -w server` in separate terminals.
@@ -61,20 +61,20 @@ Use `npm run preview -w client` to preview the frontend build; set `CLIENT_URL` 
 ## Manual verification
 
 1. Run `npm run dev` and open http://localhost:5173
-2. Confirm the page shows **Backend connected**
+2. Confirm the page loads and the **Connecting…** notice clears
 3. Open http://localhost:3001/api/health and confirm the response is `{"status":"ok"}`
-4. Stop the backend and refresh the frontend to verify the waiting message
+4. Stop the backend and verify the header shows **Reconnecting…**, then restart it and confirm the room recovers
 
-The frontend fetches the health endpoint directly, so this also verifies the browser CORS configuration.
+The health endpoint remains available for diagnostics; the interface uses the live socket connection to show connection status.
 
 ## Live connection
 
 Socket.io shares the backend HTTP server and uses the same `CLIENT_URL` CORS origin.
 The frontend keeps one socket instance in `client/src/socket/socket.ts` and uses `VITE_API_URL` for both HTTP and socket connections.
 Connection listeners are cleaned up when the app unmounts, and interrupted connections retry automatically.
-The API health check runs when the live connection connects or reconnects; disconnecting clears the previous health result.
+A quiet header notice appears only while connecting or reconnecting; a healthy connection needs no badge.
 
-To verify reconnection, run the client and server in separate terminals and open two tabs at http://localhost:5173. Both should show **Live connection: Connected**. Stop the backend and check that both statuses change, then restart it and confirm both reconnect without refreshing. Refresh or close one tab and check the server connection and disconnection logs.
+To verify reconnection, run the client and server in separate terminals and open two tabs at http://localhost:5173. The connection notice should clear in both tabs. Stop the backend and check that both statuses change, then restart it and confirm both reconnect without refreshing. Refresh or close one tab and check the server connection and disconnection logs.
 
 ## Local PostgreSQL on macOS
 
@@ -169,3 +169,33 @@ Room loading and chat history requests time out after eight seconds and offer re
 Disconnecting clears presence and timer controls until membership is restored. Chat retains its loaded messages and unsent draft. An interrupted send shows an unconfirmed-delivery message, preserves the draft, and ignores stale acknowledgements. It never automatically resends; check the restored history before sending again to avoid duplicates. Drafts are held in memory and do not survive a page refresh.
 
 To verify recovery, join a room, enter an unsent draft, and stop the backend. Confirm the draft remains visible and controls are disabled. Open the same room in a second tab while offline, then restart the backend. The first tab should rejoin with its draft intact, restore presence and timer state, and reload history; the second should load the room without a refresh. Automated membership tests cover transient retries, permanent errors, stale acknowledgements, and cleanup.
+
+## Interface and accessibility
+
+The home page has a compact welcome and open forms separated by thin dividers. Light mode uses cream, honey, and terracotta; night mode uses cool blue-gray and lavender. The study room window switches themes and remembers the chosen appearance. Hovering or focusing the window adds a subtle theme-colored glow; clicking it switches between day and night. Entering a room without a saved name shows a dedicated welcome screen with the mascot and display-name form. A successful join reveals the room and focuses its title. Saved names rejoin automatically, and normal reconnections preserve the room view. The mascot eyes follow the cursor and blink, with reduced-motion support. Create and join sit in two columns on desktop and stack on narrow screens. The study room places a circular progress timer inside an illustrated alarm clock on a desk. Active users appear in upholstered seats with their names beside their avatars, and the seating wraps on narrow screens. The window, lamp, furnishings, and clock follow the light and night palettes. The corner mascot opens chat and displays an unread-message badge. Desktop chat slides in beside the room; mobile chat uses the full screen. Room options include copying the invite link and leaving. The header contains only the cove wordmark; connection feedback stays within the room controls.
+
+**Copy invite** copies a link built from the current site origin. If clipboard access is unavailable, a selected read-only field offers the link for manual copying. The timer progress bar reflects server-authoritative session time, with focus and break colors and accessible progress values.
+
+Chat scrolls within its own message list. Reading older messages pauses automatic scrolling and exposes **New messages** when updates arrive. **Ctrl + Enter** or **⌘ + Enter** sends a message; Enter inserts a new line. Focus returns to the composer after sending. Forms have associated labels and error descriptions, controls have visible keyboard focus, and the page has a skip-to-content link.
+
+Verify desktop and narrow mobile layouts, keyboard navigation, invite copying, empty states, invalid codes, and two-tab timer and chat updates. Check that loading history does not move the entire page, and new messages do not interrupt reading older chat.
+
+## Shared room radio
+
+Click the illustrated radio to choose Café, Rainy day, or Slow afternoon. Any joined member can change the station, play, pause, or skip for the room. Play and Pause control music for everyone, and each person has an independent volume control (zero mutes only their device). Playback starts automatically for joined members; if a browser blocks it, an **Enable sound** prompt lets that person allow audio without changing the room playback state.
+
+Six lo-fi tracks by TAD are served directly from `client/public/music`, without advertising, third-party players, or music accounts. The source collection is published under CC0; original download links and licensing provenance are recorded in `client/public/music/CREDITS.md`. Keep these assets in the deployed client build.
+
+The server shares a station, playback offset, and start timestamp. Clients resolve the looping playlist locally, check drift every second, and refresh server time every 15 seconds and on returning to the page. Late joins and reconnects seek to the room's current position; synchronization is approximate, not sample-accurate. Music is independent of the Pomodoro timer. Radio state is held in one backend process and resets after a server restart or after the room has been empty for 60 seconds.
+
+Verify in two tabs: join the same room, open each radio and play or switch stations from either. Allow sound if a browser prompts. Check that pause and next track update both tabs, while volume and muting affect only their own tab. Automated tests cover playlist boundaries, pause/resume, room isolation, membership validation, late joins, and empty-room cleanup.
+
+## Room lifetime
+
+Rooms close after **24 hours with nobody connected**. A newly created room starts with a 24-hour deadline; joining cancels it. The last departure or detected disconnect starts a new deadline. Quiet connected members keep the room open, while chat, timer, radio activity, and link lookups do not extend an empty room's lifetime.
+
+Apply the room-expiry migration with `npm run db:deploy -w server`. Existing rooms receive 24 hours from migration time, rather than being deleted based on their age. The backend checks expired rooms every minute and checks the deadline again on lookup and join, so an expired room cannot be entered while awaiting the next sweep. Deletion cascades to messages and timer state and clears timer tasks and cached radio state. Only a reserved six-character code remains, preventing old invite links from being reused for unrelated rooms and allowing a stable closed-room message. Closed-room lookup and history requests return HTTP 410; socket joins return `ROOM_CLOSED`.
+
+Expiry timestamps are persisted in PostgreSQL. Empty deadlines survive restarts unchanged. After a crash, a previously occupied room receives a conservative 24-hour deadline from startup, allowing clients to reconnect; the scheduled sweep first runs after one minute. Graceful shutdown records departures. A single backend coordinator serializes joins, presence changes, and deletion per room, while timer cleanup waits for outstanding timer writes. Failed presence writes are retried with their original departure time. This coordination assumes one backend process; multiple replicas require shared presence and distributed coordination before deployment.
+
+Tests cover quiet sessions, unused rooms, rejoining, startup recovery, abandoned joins, both join/deletion race orders, failed persistence, multiple socket members, reserved codes, HTTP and socket rejection, and PostgreSQL deletion of room data.

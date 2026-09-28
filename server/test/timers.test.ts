@@ -64,3 +64,22 @@ test('a late snapshot resolves completion even before a delayed timeout runs', a
     assert.equal(snapshot.timer.remainingSeconds, 300)
   } finally { await timers.dispose() }
 })
+
+test('room deletion drains timer writes and cancels future completion work', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1000 })
+  let writes = 0
+  let removed = false
+  const timers = createTimers(() => {}, Date.now, {
+    load: async () => null,
+    save: async () => { assert.equal(removed, false); writes++ },
+    runningRooms: async () => [],
+  })
+  try {
+    const starting = timers.act('A', 'start')
+    const deleting = timers.forget('A', async () => { assert.equal(writes, 1); removed = true })
+    await starting; await deleting
+    t.mock.timers.tick(1500 * 1000)
+    await timers.dispose()
+    assert.equal(writes, 1)
+  } finally { await timers.dispose() }
+})
